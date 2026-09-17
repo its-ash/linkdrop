@@ -22,3 +22,17 @@ adb shell am start -a android.intent.action.SEND -t text/plain \
   --es android.intent.extra.TEXT "https://example.com/file.pdf" \
   com.itsash.linkdrop/.MainActivity
 ```
+
+## Makefile
+
+```bash
+make run      # flutter run
+make build    # flutter build apk --release
+make deploy   # build, push to main, tag, and publish a GitHub release with the APK
+```
+
+## Product page
+
+`index.html` at the repo root is a standalone landing page for the app (no build step — open it directly or serve the repo root).
+
+Built by [itsash.in](https://itsash.in).
