@@ -33,6 +33,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _shareSub = ShareIntentService.instance.sharedText.listen(
       _handleSharedText,
     );
+    final pending = ShareIntentService.instance.consumePending();
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleSharedText(pending));
+    }
   }
 
   @override
