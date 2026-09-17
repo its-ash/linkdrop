@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:theme/theme.dart';
 
 import '../models/download_item.dart';
+import '../utils/file_kind.dart';
 import '../utils/formatters.dart';
 
-class DownloadTile extends StatelessWidget {
+class DownloadTile extends StatefulWidget {
   const DownloadTile({
     super.key,
     required this.item,
@@ -20,17 +21,14 @@ class DownloadTile extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onDelete;
 
-  IconData get _fileIcon {
-    final mime = item.mimeType ?? '';
-    if (mime.startsWith('image/')) return Icons.image_outlined;
-    if (mime.startsWith('video/')) return Icons.movie_outlined;
-    if (mime.startsWith('audio/')) return Icons.audiotrack_outlined;
-    if (mime.contains('pdf')) return Icons.picture_as_pdf_outlined;
-    if (mime.contains('zip') || mime.contains('compressed')) return Icons.folder_zip_outlined;
-    return Icons.insert_drive_file_outlined;
-  }
+  @override
+  State<DownloadTile> createState() => _DownloadTileState();
+}
 
-  (ThemeStatus, String) get _statusInfo => switch (item.status) {
+class _DownloadTileState extends State<DownloadTile> {
+  double _pressScale = 1;
+
+  (ThemeStatus, String) get _statusInfo => switch (widget.item.status) {
     DownloadStatus.queued => (ThemeStatus.neutral, 'Queued'),
     DownloadStatus.resolving => (ThemeStatus.info, 'Resolving'),
     DownloadStatus.downloading => (ThemeStatus.info, 'Downloading'),
@@ -42,107 +40,128 @@ class DownloadTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final (status, label) = _statusInfo;
-    final isActive =
-        item.status == DownloadStatus.downloading ||
-        item.status == DownloadStatus.resolving;
+    final isActive = item.status == DownloadStatus.downloading || item.status == DownloadStatus.resolving;
+    final isOpenable = item.status == DownloadStatus.completed;
+    final kind = fileKindFor(item.mimeType, item.fileName);
+    final kindStyle = FileKindStyle.of(kind);
 
-    return ThemeCard(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: item.status == DownloadStatus.completed ? onOpen : null,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(_fileIcon, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.fileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.url,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+    return AnimatedScale(
+      scale: _pressScale,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      child: ThemeCard(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: isOpenable ? widget.onOpen : null,
+          onTapDown: isOpenable ? (_) => setState(() => _pressScale = 0.98) : null,
+          onTapCancel: () => setState(() => _pressScale = 1),
+          onTapUp: (_) => setState(() => _pressScale = 1),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: kindStyle.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(kindStyle.icon, color: kindStyle.color, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.fileName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            item.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ThemeStatusPill(label: label, status: status),
+                  ],
+                ),
+                if (isActive) ...[
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: item.totalBytes > 0 ? item.progress : 0),
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                      builder: (context, value, _) => ThemeProgressIndicator(
+                        type: ThemeProgressIndicatorType.linear,
+                        value: item.totalBytes > 0 ? value : null,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ThemeStatusPill(label: label, status: status),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.totalBytes > 0
+                        ? '${formatBytes(item.receivedBytes)} / ${formatBytes(item.totalBytes)}'
+                        : formatBytes(item.receivedBytes),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
-              ),
-              if (isActive) ...[
-                const SizedBox(height: 10),
-                ThemeProgressIndicator(
-                  type: ThemeProgressIndicatorType.linear,
-                  value: item.totalBytes > 0 ? item.progress : null,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.totalBytes > 0
-                      ? '${formatBytes(item.receivedBytes)} / ${formatBytes(item.totalBytes)}'
-                      : formatBytes(item.receivedBytes),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-              if (item.status == DownloadStatus.failed &&
-                  item.errorMessage != null) ...[
+                if (item.status == DownloadStatus.failed && item.errorMessage != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    item.errorMessage!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+                  ),
+                ],
+                if (item.status == DownloadStatus.completed) ...[
+                  const SizedBox(height: 4),
+                  Text(formatBytes(item.totalBytes), style: Theme.of(context).textTheme.bodySmall),
+                ],
                 const SizedBox(height: 6),
-                Text(
-                  item.errorMessage!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 12,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (isActive)
+                      TextButton.icon(
+                        onPressed: widget.onCancel,
+                        icon: const Icon(Icons.close, size: 18),
+                        label: const Text('Cancel'),
+                      ),
+                    if (item.status == DownloadStatus.failed || item.status == DownloadStatus.canceled)
+                      TextButton.icon(
+                        onPressed: widget.onRetry,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Retry'),
+                      ),
+                    if (!isActive)
+                      TextButton.icon(
+                        onPressed: widget.onDelete,
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Delete'),
+                      ),
+                  ],
                 ),
               ],
-              if (item.status == DownloadStatus.completed) ...[
-                const SizedBox(height: 4),
-                Text(
-                  formatBytes(item.totalBytes),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (isActive)
-                    TextButton.icon(
-                      onPressed: onCancel,
-                      icon: const Icon(Icons.close, size: 18),
-                      label: const Text('Cancel'),
-                    ),
-                  if (item.status == DownloadStatus.failed ||
-                      item.status == DownloadStatus.canceled)
-                    TextButton.icon(
-                      onPressed: onRetry,
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Retry'),
-                    ),
-                  if (!isActive)
-                    TextButton.icon(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Delete'),
-                    ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

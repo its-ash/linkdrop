@@ -98,12 +98,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
               itemCount: _items.length,
               itemBuilder: (context, index) {
                 final item = _items[index];
-                return DownloadTile(
-                  item: item,
-                  onOpen: () => _openFile(item),
-                  onCancel: () => DownloadManager.instance.cancel(item.id),
-                  onRetry: () => DownloadManager.instance.retry(item.id),
-                  onDelete: () => _confirmDelete(item),
+                return TweenAnimationBuilder<double>(
+                  key: ValueKey(item.id),
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOut,
+                  builder: (context, value, child) => Opacity(
+                    opacity: value,
+                    child: Transform.translate(offset: Offset(0, (1 - value) * 12), child: child),
+                  ),
+                  child: DownloadTile(
+                    item: item,
+                    onOpen: () => _openFile(item),
+                    onCancel: () => DownloadManager.instance.cancel(item.id),
+                    onRetry: () => DownloadManager.instance.retry(item.id),
+                    onDelete: () => _confirmDelete(item),
+                  ),
                 );
               },
             ),
