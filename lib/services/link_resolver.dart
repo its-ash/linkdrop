@@ -86,8 +86,20 @@ class LinkResolver {
         .trim();
     final contentLength =
         int.tryParse(headers.value(Headers.contentLengthHeader) ?? '') ?? 0;
+
+    final contentDisposition = headers.value('content-disposition');
+    final isAttachment =
+        contentDisposition?.toLowerCase().contains('attachment') ?? false;
+    if (!isAttachment && (contentType == 'text/html' || contentType == 'application/xhtml+xml')) {
+      throw LinkResolveException(
+        "This link points to a web page, not a downloadable file. LinkDrop can't pull "
+        'videos or posts out of sites like Instagram, YouTube, or Twitter/X — only '
+        'direct file links.',
+      );
+    }
+
     final fileName = _resolveFileName(
-      headers.value('content-disposition'),
+      contentDisposition,
       finalUri,
       contentType,
     );

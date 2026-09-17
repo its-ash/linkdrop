@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/download_item.dart';
 import 'database_service.dart';
+import 'instagram_extractor.dart';
 import 'link_resolver.dart';
 
 class DownloadManager {
@@ -65,9 +66,23 @@ class DownloadManager {
     _update(item);
 
     try {
-      final resolved = await _resolver.resolve(url);
+      var resolveUrl = url;
+      if (InstagramExtractor.isInstagramUrl(url)) {
+        try {
+          resolveUrl = await InstagramExtractor.instance.extractMediaUrl(url);
+        } on InstagramExtractException catch (e) {
+          item = item.copyWith(status: DownloadStatus.failed, errorMessage: e.message);
+          _update(item);
+          return;
+        }
+      }
+
+      final resolved = await _resolver.resolve(resolveUrl);
       final dir = await _downloadsDirectory();
-      final targetPath = await _uniquePath(dir, resolved.fileName);
+      final fileName = InstagramExtractor.isInstagramUrl(url)
+          ? _instagramFileName(url, resolved.mimeType)
+          : resolved.fileName;
+      final targetPath = await _uniquePath(dir, fileName);
 
       item = item.copyWith(
         fileName: p.basename(targetPath),
@@ -94,7 +109,19 @@ class DownloadManager {
         },
       );
 
-      item = item.copyWith(status: DownloadStatus.completed);
+      final savedFile = File(targetPath);
+      final savedBytes = await savedFile.length();
+      if (savedBytes == 0) {
+        await savedFile.delete();
+        item = item.copyWith(
+          status: DownloadStatus.failed,
+          errorMessage: 'The server returned an empty file. This link may not point to a real download.',
+        );
+        _update(item);
+        return;
+      }
+
+      item = item.copyWith(status: DownloadStatus.completed, receivedBytes: savedBytes, totalBytes: savedBytes);
       _update(item);
     } on LinkResolveException catch (e) {
       item = item.copyWith(
@@ -203,5 +230,14 @@ class DownloadManager {
     final segments =
         uri?.pathSegments.where((s) => s.isNotEmpty).toList() ?? [];
     return segments.isNotEmpty ? segments.last : 'download';
+  }
+
+  String _instagramFileName(String postUrl, String? mimeType) {
+    final uri = Uri.tryParse(postUrl);
+    final segments = uri?.pathSegments.where((s) => s.isNotEmpty).toList() ?? [];
+    final kindIndex = segments.indexWhere((s) => s == 'p' || s == 'reel' || s == 'tv');
+    final code = (kindIndex != -1 && kindIndex + 1 < segments.length) ? segments[kindIndex + 1] : 'instagram';
+    final ext = mimeType == 'image/jpeg' || mimeType == 'image/webp' ? 'jpg' : 'mp4';
+    return 'instagram_$code.$ext';
   }
 }
