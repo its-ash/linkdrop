@@ -5,7 +5,7 @@ A share-to-download manager for Android. Share a URL from any app, LinkDrop rece
 ## Stack
 
 - Flutter (Android)
-- [`theme`](https://github.com/its-ash/theme) — shared `ThemeX` component library
+- [`theme`](https://github.com/its-ash/theme) — shared `Ui*` component library
 - `receive_sharing_intent`, `dio`, `sqflite`, `open_filex`, `permission_handler`
 
 ## Run

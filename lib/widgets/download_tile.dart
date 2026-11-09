@@ -5,7 +5,7 @@ import '../models/download_item.dart';
 import '../utils/file_kind.dart';
 import '../utils/formatters.dart';
 
-class DownloadTile extends StatefulWidget {
+class DownloadTile extends StatelessWidget {
   const DownloadTile({
     super.key,
     required this.item,
@@ -21,148 +21,102 @@ class DownloadTile extends StatefulWidget {
   final VoidCallback onRetry;
   final VoidCallback onDelete;
 
-  @override
-  State<DownloadTile> createState() => _DownloadTileState();
-}
-
-class _DownloadTileState extends State<DownloadTile> {
-  double _pressScale = 1;
-
-  (ThemeStatus, String) get _statusInfo => switch (widget.item.status) {
-    DownloadStatus.queued => (ThemeStatus.neutral, 'Queued'),
-    DownloadStatus.resolving => (ThemeStatus.info, 'Resolving'),
-    DownloadStatus.downloading => (ThemeStatus.info, 'Downloading'),
-    DownloadStatus.paused => (ThemeStatus.warning, 'Paused'),
-    DownloadStatus.completed => (ThemeStatus.success, 'Completed'),
-    DownloadStatus.failed => (ThemeStatus.error, 'Failed'),
-    DownloadStatus.canceled => (ThemeStatus.neutral, 'Canceled'),
+  (UiStatus, String) get _statusInfo => switch (item.status) {
+    DownloadStatus.queued => (UiStatus.neutral, 'Queued'),
+    DownloadStatus.resolving => (UiStatus.info, 'Resolving'),
+    DownloadStatus.downloading => (UiStatus.info, 'Downloading'),
+    DownloadStatus.paused => (UiStatus.warning, 'Paused'),
+    DownloadStatus.completed => (UiStatus.success, 'Completed'),
+    DownloadStatus.failed => (UiStatus.danger, 'Failed'),
+    DownloadStatus.canceled => (UiStatus.neutral, 'Canceled'),
   };
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
     final (status, label) = _statusInfo;
     final isActive = item.status == DownloadStatus.downloading || item.status == DownloadStatus.resolving;
     final isOpenable = item.status == DownloadStatus.completed;
     final kind = fileKindFor(item.mimeType, item.fileName);
     final kindStyle = FileKindStyle.of(kind);
+    final text = context.text;
 
-    return AnimatedScale(
-      scale: _pressScale,
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
-      child: ThemeCard(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: isOpenable ? widget.onOpen : null,
-          onTapDown: isOpenable ? (_) => setState(() => _pressScale = 0.98) : null,
-          onTapCancel: () => setState(() => _pressScale = 1),
-          onTapUp: (_) => setState(() => _pressScale = 1),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: UiSpace.lg, vertical: 6),
+      child: UiCard(
+        padding: const EdgeInsets.all(14),
+        onTap: isOpenable ? onOpen : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: kindStyle.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(kindStyle.icon, color: kindStyle.color, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.fileName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            item.url,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ThemeStatusPill(label: label, status: status),
-                  ],
+                UiIconBox(kindStyle.icon, color: kindStyle.color, size: 44),
+                const SizedBox(width: UiSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
+                      const SizedBox(height: 3),
+                      Text(item.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall),
+                    ],
+                  ),
                 ),
-                if (isActive) ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween(end: item.totalBytes > 0 ? item.progress : 0),
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
-                      builder: (context, value, _) => ThemeProgressIndicator(
-                        type: ThemeProgressIndicatorType.linear,
-                        value: item.totalBytes > 0 ? value : null,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.totalBytes > 0
-                        ? '${formatBytes(item.receivedBytes)} / ${formatBytes(item.totalBytes)}'
-                        : formatBytes(item.receivedBytes),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-                if (item.status == DownloadStatus.failed && item.errorMessage != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    item.errorMessage!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
-                  ),
-                ],
-                if (item.status == DownloadStatus.completed) ...[
-                  const SizedBox(height: 4),
-                  Text(formatBytes(item.totalBytes), style: Theme.of(context).textTheme.bodySmall),
-                ],
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (isActive)
-                      TextButton.icon(
-                        onPressed: widget.onCancel,
-                        icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Cancel'),
-                      ),
-                    if (item.status == DownloadStatus.failed || item.status == DownloadStatus.canceled)
-                      TextButton.icon(
-                        onPressed: widget.onRetry,
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: const Text('Retry'),
-                      ),
-                    if (!isActive)
-                      TextButton.icon(
-                        onPressed: widget.onDelete,
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        label: const Text('Delete'),
-                      ),
-                  ],
-                ),
+                const SizedBox(width: UiSpace.sm),
+                UiStatusPill(label, status: status),
               ],
             ),
-          ),
+            if (isActive) ...[
+              const SizedBox(height: UiSpace.md),
+              UiProgressBar(item.totalBytes > 0 ? item.progress : null),
+              const SizedBox(height: UiSpace.xs),
+              Text(
+                item.totalBytes > 0
+                    ? '${formatBytes(item.receivedBytes)} / ${formatBytes(item.totalBytes)}'
+                    : formatBytes(item.receivedBytes),
+                style: text.bodySmall,
+              ),
+            ],
+            if (item.status == DownloadStatus.failed && item.errorMessage != null) ...[
+              const SizedBox(height: 6),
+              Text(item.errorMessage!, style: text.bodySmall?.copyWith(color: context.colors.danger)),
+            ],
+            if (item.status == DownloadStatus.completed) ...[
+              const SizedBox(height: UiSpace.xs),
+              Text(formatBytes(item.totalBytes), style: text.bodySmall),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (isActive)
+                  UiButton(
+                    'Cancel',
+                    variant: UiButtonVariant.ghost,
+                    size: UiSize.sm,
+                    icon: Icons.close,
+                    onPressed: onCancel,
+                  ),
+                if (item.status == DownloadStatus.failed || item.status == DownloadStatus.canceled)
+                  UiButton(
+                    'Retry',
+                    variant: UiButtonVariant.ghost,
+                    size: UiSize.sm,
+                    icon: Icons.refresh,
+                    onPressed: onRetry,
+                  ),
+                if (!isActive)
+                  UiButton(
+                    'Delete',
+                    variant: UiButtonVariant.ghost,
+                    size: UiSize.sm,
+                    icon: Icons.delete_outline,
+                    onPressed: onDelete,
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );

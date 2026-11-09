@@ -28,13 +28,6 @@ class LinkDropApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'LinkDrop',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme(),
-      darkTheme: AppTheme.darkTheme(),
-      themeMode: ThemeMode.system,
-      home: const LibraryScreen(),
-    );
+    return const UiApp(title: 'LinkDrop', home: LibraryScreen());
   }
 }

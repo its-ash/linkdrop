@@ -27,12 +27,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     _items = DownloadManager.instance.items;
-    _itemsSub = DownloadManager.instance.itemsStream.listen(
-      (items) => setState(() => _items = items),
-    );
-    _shareSub = ShareIntentService.instance.sharedText.listen(
-      _handleSharedText,
-    );
+    _itemsSub = DownloadManager.instance.itemsStream.listen((items) => setState(() => _items = items));
+    _shareSub = ShareIntentService.instance.sharedText.listen(_handleSharedText);
     final pending = ShareIntentService.instance.consumePending();
     if (pending != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _handleSharedText(pending));
@@ -50,7 +46,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final url = extractUrl(sharedText);
     if (url == null) {
       if (mounted) {
-        Notify.warning(context, 'No downloadable link found in the shared content.');
+        context.showToast('No downloadable link found in the shared content.', status: UiStatus.warning);
       }
       return;
     }
@@ -64,18 +60,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Future<void> _openFile(DownloadItem item) async {
     final result = await OpenFilex.open(item.filePath);
     if (result.type != ResultType.done && mounted) {
-      Notify.error(context, 'Could not open file: ${result.message}');
+      context.showToast('Could not open file: ${result.message}', status: UiStatus.danger);
     }
   }
 
   Future<void> _confirmDelete(DownloadItem item) async {
-    final confirmed = await ThemeConfirmDialog.show(
+    final confirmed = await UiDialog.confirm(
       context,
       title: 'Delete download?',
-      content:
-          '${item.fileName} will be removed from LinkDrop\'s library and deleted from storage.',
+      message: '${item.fileName} will be removed from LinkDrop\'s library and deleted from storage.',
       confirmLabel: 'Delete',
-      isDestructive: true,
+      destructive: true,
     );
     if (confirmed) {
       await DownloadManager.instance.deleteCompletedFile(item.id);
@@ -85,12 +80,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const ThemeAppBar(title: 'LinkDrop'),
+      appBar: const UiAppBar(title: 'LinkDrop'),
       body: _items.isEmpty
-          ? ThemeEmptyState(
+          ? const UiEmptyState(
               title: 'No downloads yet',
-              subtitle:
-                  'Share a link to any file from another app and it will show up here.',
+              message: 'Share a link to any file from another app and it will show up here.',
               icon: Icons.download_outlined,
             )
           : ListView.builder(

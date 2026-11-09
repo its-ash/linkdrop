@@ -4,7 +4,7 @@ Flutter Android app: share-to-download manager. Receives a URL via the Android S
 
 ## Stack
 - Flutter (Dart), Android only.
-- UI/theming: `theme` package at `/Users/ashvinijangid/Desktop/android/theme` (path dependency) — use its `ThemeX` components instead of raw Material widgets wherever one exists.
+- UI/theming: `theme` package at `/Users/ashvinijangid/Desktop/android/theme` (path dependency, v2) — use its `Ui*` components (`UiApp`, `UiCard`, `UiButton`, `UiSheet`, `UiDialog`, `context.showToast`, ...) instead of raw Material widgets wherever one exists. Colors from `context.colors` / `context.colors.tone(UiStatus.x)`, text styles from `context.text`. See `theme/COMPONENTS.md`.
 - `receive_sharing_intent` for the Share Sheet, `dio` for HTTP resolution/download, `sqflite` for the local library index, `open_filex` to open downloaded files, `permission_handler` for storage permission.
 
 ## Structure
