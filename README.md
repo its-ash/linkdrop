@@ -1,21 +1,33 @@
 # LinkDrop
 
-A share-to-download manager for Android. Share a URL from any app, LinkDrop receives it through the Android Share Sheet, resolves an accessible downloadable resource, downloads it, and lists it in a local library.
+Share a link. Get the file.
 
-## Stack
+**[Website](https://linkdrop.itsash.in)** · **[Download APK](https://github.com/its-ash/linkdrop/releases/latest/download/linkdrop.apk)** · Get it in **[Ash Store](https://store.itsash.in)**
 
-- Flutter (Android)
-- [`theme`](https://github.com/its-ash/theme) — shared `Ui*` component library
-- `receive_sharing_intent`, `dio`, `sqflite`, `open_filex`, `permission_handler`
+## Features
 
-## Run
+- **Share to download**: share a URL from any app through the Android share
+  sheet. LinkDrop finds the downloadable file behind it and downloads it.
+- **Library**: every download is kept in a local library you can browse and open.
+- **No account**: everything stays on your phone.
+
+## Install
+
+- **Ash Store**: install [Ash Store](https://store.itsash.in) once, then install and update LinkDrop from it.
+- **APK**: download the [latest APK](https://github.com/its-ash/linkdrop/releases/latest/download/linkdrop.apk) on your phone and open it. Allow your browser to install unknown apps if Android asks.
+
+## Develop
+
+Needs Flutter ≥ 3.44 and the shared theme package.
 
 ```bash
-flutter pub get
-flutter run
+make run      # flutter run
+make build    # release APK
+make deploy   # bump version, build, tag, push, GitHub release (see store.mk)
 ```
 
-To try the share flow, share a link (e.g. a direct image/PDF/video URL) to LinkDrop from another app, or use `adb`:
+To try the share flow, share a link (a direct image, PDF or video URL) to
+LinkDrop from another app, or use `adb`:
 
 ```bash
 adb shell am start -a android.intent.action.SEND -t text/plain \
@@ -23,16 +35,31 @@ adb shell am start -a android.intent.action.SEND -t text/plain \
   com.itsash.linkdrop/.MainActivity
 ```
 
-## Makefile
+## Release
 
-```bash
-make run      # flutter run
-make build    # flutter build apk --release
-make deploy   # build, push to main, tag, and publish a GitHub release with the APK
+`make deploy` follows the Ash Store kit (`store.mk`, `store.json`): it bumps the
+version in `pubspec.yaml`, builds, commits, tags `vX.Y.Z`, pushes, and publishes
+a GitHub release with `linkdrop.apk`. Ash Store and the website pick up the new
+version from that release.
+
+## Project layout
+
+```
+lib/
+├── main.dart
+├── models/
+├── screens/      # library screen and friends
+├── services/     # download manager, share intent
+├── utils/
+└── widgets/
+index.html        # landing page (GitHub Pages, linkdrop.itsash.in)
 ```
 
-## Product page
+Stack: Flutter (Android), [`theme`](https://github.com/its-ash/theme),
+`receive_sharing_intent`, `dio`, `sqflite`, `open_filex`, `permission_handler`.
 
-`index.html` at the repo root is a standalone landing page for the app (no build step — open it directly or serve the repo root).
+## License
+
+No license file is included yet.
 
 Built by [itsash.in](https://itsash.in).

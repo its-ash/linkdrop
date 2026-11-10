@@ -1,547 +1,332 @@
 <!doctype html>
+<!--
+  Ash Store landing page template. Canonical copy: ash-store/store-kit/landing.html.
+  Copy it to an app repo root as index.html. It reads ./store.json and the
+  latest GitHub release at load time, so it needs no edits per app.
+  With "catalog": true in store.json it also lists every Ash Store app.
+  Light theme in the style of an app store listing page.
+-->
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LinkDrop — Share a link, get the file</title>
-<meta name="description" content="LinkDrop catches any link you share from Android and turns it into a downloaded file in your library. No browser, no copy-paste, no ads." />
-
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#ffffff">
+<title>Ash Store app</title>
+<meta name="description" content="">
+<link rel="icon" href="">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-<script src="https://cdn.tailwindcss.com"></script>
-
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    color-scheme: light;
-    --ink: #14181c;
-    --ink-soft: #4b5563;
-    --paper: #fbfaf8;
-    --paper-raised: #ffffff;
-    --line: #e6e3dd;
-    --accent: #2f6fed;
-    --accent-ink: #ffffff;
-    --accent-tint: #eaf1ff;
-    --radius: 20px;
+    --bg: #ffffff; --surface: #f8f9fa; --text: #202124; --muted: #5f6368; --subtle: #80868b;
+    --border: #dadce0; --divider: #e8eaed;
+    --green: #01875f; --green-hover: #056449; --green-soft: #e6f3ef; --on-green: #ffffff;
+    --chip: #f1f3f4;
+    --shadow: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
   }
-
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
-  }
-  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  html { color-scheme: light; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 Roboto, "Google Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+  a { color: var(--green); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1024px; margin: 0 auto; padding: 0 24px; }
 
-  .container { max-width: 1180px; margin-inline: auto; padding-inline: 1.5rem; }
-  @media (min-width: 768px) { .container { padding-inline: 2.5rem; } }
+  /* Top bar */
+  .topbar { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--divider); }
+  .topbar .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 20px; font-weight: 400; }
+  .brand:hover { text-decoration: none; }
+  .brand .logo { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center;
+    background: linear-gradient(135deg, #34a853 0%, #01875f 50%, #1a73e8 100%); color: #fff; font-weight: 700; font-size: 16px; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs a { color: var(--muted); font-weight: 500; padding: 8px 14px; border-radius: 20px; }
+  .tabs a:hover { background: var(--chip); text-decoration: none; }
 
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    border-radius: 999px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    padding: 0.85rem 1.5rem;
-    transition: transform 160ms cubic-bezier(0.23,1,0.32,1), box-shadow 160ms ease;
-    white-space: nowrap;
-  }
-  .btn:active { transform: scale(0.97); }
-  .btn-primary {
-    background: var(--ink);
-    color: var(--paper);
-    box-shadow: 0 1px 2px rgba(20,24,28,0.06);
-  }
-  .btn-primary:hover { box-shadow: 0 8px 20px -6px rgba(20,24,28,0.35); transform: translateY(-1px); }
-  .btn-ghost {
-    background: transparent;
-    color: var(--ink);
-    border: 1.5px solid var(--line);
-  }
-  .btn-ghost:hover { border-color: var(--ink); }
+  /* App header */
+  .hero { display: grid; grid-template-columns: 1fr auto; gap: 32px; padding: 40px 0 8px; align-items: start; }
+  h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 500; line-height: 1.1; margin: 0 0 12px; letter-spacing: 0; }
+  .dev { font-size: 16px; font-weight: 500; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .hero img.icon { width: 240px; height: 240px; border-radius: 48px; box-shadow: var(--shadow); background: var(--surface); object-fit: cover; }
+  .hero .icon-sm { display: none; }
 
-  .card {
-    background: var(--paper-raised);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-  }
+  .stats { display: flex; align-items: center; margin: 28px 0 0; padding: 0; list-style: none; }
+  .stats li { padding: 0 24px; text-align: center; position: relative; min-width: 84px; }
+  .stats li:first-child { padding-left: 0; }
+  .stats li + li::before { content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 24px; border-left: 1px solid var(--divider); }
+  .stats .v { font-weight: 500; font-size: 14px; color: var(--text); white-space: nowrap; }
+  .stats .l { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
-  .reveal {
-    opacity: 0;
-    transform: translateY(14px);
-    transition: opacity 600ms cubic-bezier(0.23,1,0.32,1), transform 600ms cubic-bezier(0.23,1,0.32,1);
-  }
-  .reveal.is-visible { opacity: 1; transform: translateY(0); }
-  .reveal-stagger.is-visible > * {
-    animation: rise 560ms cubic-bezier(0.23,1,0.32,1) both;
-  }
-  .reveal-stagger.is-visible > *:nth-child(1) { animation-delay: 0ms; }
-  .reveal-stagger.is-visible > *:nth-child(2) { animation-delay: 60ms; }
-  .reveal-stagger.is-visible > *:nth-child(3) { animation-delay: 120ms; }
-  .reveal-stagger.is-visible > *:nth-child(4) { animation-delay: 180ms; }
-  .reveal-stagger.is-visible > *:nth-child(5) { animation-delay: 240ms; }
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(16px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 28px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 28px; border-radius: 8px;
+    font-weight: 500; font-size: 14px; border: 1px solid var(--border); background: var(--bg); color: var(--green); }
+  .btn:hover { text-decoration: none; background: var(--green-soft); }
+  .btn.install { background: var(--green); color: var(--on-green); border-color: var(--green); min-width: 200px; }
+  .btn.install:hover { background: var(--green-hover); }
+  .btn svg { width: 20px; height: 20px; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 16px; display: flex; align-items: center; gap: 6px; }
+  .note svg { width: 16px; height: 16px; flex: none; }
 
-  @media (hover: hover) and (pointer: fine) {
-    .lift { transition: transform 220ms cubic-bezier(0.23,1,0.32,1), box-shadow 220ms ease, border-color 220ms ease; }
-    .lift:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -20px rgba(20,24,28,0.25); border-color: #d7d2c8; }
-  }
+  /* Body sections */
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 48px; padding: 32px 0 0; }
+  section { margin: 0 0 40px; }
+  .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h2 { font-size: 22px; font-weight: 500; margin: 0; }
+  .sec-head a.arrow { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+  .sec-head a.arrow:hover { background: var(--chip); }
+  .sec-head a.arrow svg { width: 22px; height: 22px; }
+  .desc { white-space: pre-line; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .updated { margin-top: 20px; }
+  .updated .l { font-weight: 500; color: var(--text); }
+  .updated .v { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .chip { display: inline-flex; align-items: center; height: 32px; padding: 0 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-weight: 500; font-size: 14px; }
 
-  .phone-shell {
-    border-radius: 46px;
-    background: #0f1115;
-    padding: 12px;
-    box-shadow: 0 40px 80px -30px rgba(20,24,28,0.45), 0 2px 6px rgba(20,24,28,0.15);
-  }
-  .phone-screen {
-    border-radius: 36px;
-    overflow: hidden;
-    background: var(--paper);
-    position: relative;
-  }
+  .safety { border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .safety .row { display: flex; gap: 16px; align-items: flex-start; padding: 8px 0; }
+  .safety .row svg { width: 22px; height: 22px; color: var(--muted); flex: none; margin-top: 1px; }
+  .safety .t { color: var(--text); }
+  .safety .s { color: var(--muted); font-size: 12px; }
 
-  .status-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.3rem 0.7rem;
-    border-radius: 999px;
-  }
-  .status-done { background: #e7f5ec; color: #1c7c40; }
-  .status-active { background: var(--accent-tint); color: var(--accent); }
+  ol.steps { margin: 0; padding-left: 20px; color: var(--muted); }
+  ol.steps li { margin: 8px 0; padding-left: 4px; }
+  .whatsnew { color: var(--muted); white-space: pre-line; max-height: 12em; overflow: hidden; }
 
-  .progress-track {
-    height: 6px;
-    border-radius: 999px;
-    background: #edebe6;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    border-radius: 999px;
-    background: var(--accent);
-    width: 0%;
-    transition: width 1.4s cubic-bezier(0.23,1,0.32,1);
-  }
-  .is-visible .progress-fill.fill-1 { width: 100%; }
-  .is-visible .progress-fill.fill-2 { width: 62%; }
+  /* Sidebar */
+  aside h3 { font-size: 18px; font-weight: 500; margin: 0 0 16px; }
+  .side-links a { display: flex; align-items: center; gap: 16px; padding: 10px 0; color: var(--text); }
+  .side-links a:hover { text-decoration: none; color: var(--green); }
+  .side-links svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
 
-  .marquee-track {
-    display: flex;
-    width: max-content;
-    animation: marquee 34s linear infinite;
-  }
-  @keyframes marquee {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
-  }
+  /* App list (catalog and "more apps") */
+  .apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px 24px; }
+  aside .apps { grid-template-columns: 1fr; }
+  .app { display: flex; gap: 16px; align-items: center; padding: 8px; margin: 0 -8px; border-radius: 8px; color: var(--text); }
+  .app:hover { background: var(--surface); text-decoration: none; }
+  .app img { width: 64px; height: 64px; border-radius: 14px; flex: none; background: var(--surface); box-shadow: 0 1px 2px rgba(60,64,67,.2); object-fit: cover; }
+  .app .name { font-weight: 400; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app .tag { color: var(--muted); font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .app .cat { color: var(--subtle); font-size: 12px; }
 
-  .noise {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.5;
-    mix-blend-mode: multiply;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
-  }
+  footer { color: var(--muted); font-size: 12px; padding: 24px 0 40px; border-top: 1px solid var(--divider); margin-top: 24px; }
+  footer a { color: var(--muted); }
+  [hidden] { display: none !important; }
 
-  @media (prefers-reduced-motion: reduce) {
-    .reveal, .reveal-stagger > *, .progress-fill, .marquee-track {
-      animation: none !important;
-      transition: opacity 200ms ease !important;
-      transform: none !important;
-    }
-    .reveal, .reveal-stagger > * { opacity: 1; }
+  @media (max-width: 840px) {
+    main { grid-template-columns: 1fr; gap: 0; }
+    .hero { grid-template-columns: 1fr; padding-top: 24px; }
+    .hero img.icon { display: none; }
+    .hero .icon-sm { display: flex; gap: 20px; align-items: center; }
+    .hero .icon-sm img { width: 72px; height: 72px; border-radius: 16px; box-shadow: var(--shadow); flex: none; }
+    .hero .icon-sm h1 { font-size: 24px; margin: 0 0 4px; }
+    .hero .title-lg { display: none; }
+    .stats { overflow-x: auto; }
+    .stats li { padding: 0 16px; }
+    .btn.install { flex: 1; }
+    .tabs a.hide-sm { display: none; }
   }
 </style>
 </head>
 <body>
-
-<div class="noise"></div>
-
-<!-- NAV -->
-<header class="sticky top-0 z-50" style="padding-top: env(safe-area-inset-top, 0px);">
-  <div class="backdrop-blur-md bg-[#fbfaf8]/85 border-b" style="border-color: var(--line);">
-    <div class="container flex items-center justify-between" style="height: 68px;">
-      <a href="#" class="flex items-center gap-2.5">
-        <img src="assets/icon/icon.png" alt="" width="30" height="30" class="rounded-[9px]" />
-        <span class="font-bold text-[1.05rem] tracking-tight">LinkDrop</span>
-      </a>
-      <nav class="hidden md:flex items-center gap-8 text-sm font-medium" style="color: var(--ink-soft);">
-        <a href="#how" class="hover:text-[var(--ink)] transition-colors">How it works</a>
-        <a href="#library" class="hover:text-[var(--ink)] transition-colors">Library</a>
-        <a href="#faq" class="hover:text-[var(--ink)] transition-colors">FAQ</a>
-      </nav>
-      <a href="https://github.com/its-ash/linkdrop/releases/latest" class="btn btn-primary !py-2.5 !px-5 !text-[0.85rem]">Get LinkDrop</a>
-    </div>
+<div class="topbar">
+  <div class="wrap">
+    <a class="brand" href="https://store.itsash.in/"><span class="logo">A</span><span>Ash Store</span></a>
+    <nav class="tabs">
+      <a class="hide-sm" href="https://store.itsash.in/">Apps</a>
+      <a class="hide-sm" id="nav-releases" href="#">Releases</a>
+      <a id="nav-github" href="#">GitHub</a>
+    </nav>
   </div>
-</header>
+</div>
 
-<!-- HERO -->
-<section class="container pt-14 md:pt-20 pb-16 md:pb-24">
-  <div class="grid md:grid-cols-2 gap-12 md:gap-8 items-center">
-    <div class="reveal is-visible">
-      <h1 class="text-[2.6rem] leading-[1.05] md:text-6xl md:leading-[1.03] font-extrabold tracking-tight text-balance">
-        Share a link.<br />Get the file.
-      </h1>
-      <p class="mt-5 text-lg leading-relaxed max-w-[46ch]" style="color: var(--ink-soft);">
-        LinkDrop sits in your Android share sheet. Send it any link and it finds the download, pulls it in, and keeps it organized. No browser tabs, no copy-paste.
-      </p>
-      <div class="mt-8 flex flex-wrap items-center gap-3">
-        <a href="#get" class="btn btn-primary">
-          <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M207.06 80.67c-.74-.74-1.49-1.46-2.24-2.17l24.84-24.84a8 8 0 0 0-11.32-11.32l-26 26a111.43 111.43 0 0 0-128.55.19L37.66 42.34a8 8 0 0 0-11.32 11.32L51.4 78.72A113.38 113.38 0 0 0 16 161.13V184a16 16 0 0 0 16 16h192a16 16 0 0 0 16-16v-24a111.25 111.25 0 0 0-32.94-79.33M92 160a12 12 0 1 1 12-12a12 12 0 0 1-12 12m72 0a12 12 0 1 1 12-12a12 12 0 0 1-12 12"/></svg>
-          Get it on Android
-        </a>
-        <a href="#how" class="btn btn-ghost">
-          See how it works
-        </a>
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <div class="icon-sm">
+        <img id="icon-sm" alt="">
+        <div><h1 id="name-sm"></h1><div class="dev"><a href="https://itsash.in">itsash.in</a></div></div>
+      </div>
+      <div class="title-lg">
+        <h1 id="name"></h1>
+        <div class="dev"><a href="https://itsash.in">itsash.in</a></div>
+      </div>
+      <div class="sub" id="tagline"></div>
+
+      <ul class="stats">
+        <li><div class="v" id="stat-version">Latest</div><div class="l">Version</div></li>
+        <li id="stat-size-li" hidden><div class="v" id="stat-size"></div><div class="l">Download</div></li>
+        <li><div class="v">Free</div><div class="l">No account</div></li>
+        <li id="stat-cat-li" hidden><div class="v" id="stat-cat"></div><div class="l">Category</div></li>
+      </ul>
+
+      <div class="ctas">
+        <a class="btn install" id="download" href="#">Install</a>
+        <a class="btn" id="store-link" href="https://store.itsash.in/">Get Ash Store</a>
+      </div>
+      <div class="note">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 1H7c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14z"/></svg>
+        <span>This app is available for Android phones and tablets</span>
       </div>
     </div>
+    <img class="icon" id="icon" alt="">
+  </header>
 
-    <div class="reveal is-visible" style="transition-delay: 120ms;">
-      <div class="phone-shell max-w-[300px] mx-auto">
-        <div class="phone-screen aspect-[9/19.5]">
-          <div class="flex items-center justify-between px-5 pt-4 pb-2 text-[0.7rem] font-medium mono" style="color: var(--ink-soft);">
-            <span>9:41</span>
-            <div class="flex items-center gap-1">
-              <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M172 72v128a12 12 0 0 1-24 0V72a12 12 0 0 1 24 0m28-52a12 12 0 0 0-12 12v168a12 12 0 0 0 24 0V32a12 12 0 0 0-12-12m-80 80a12 12 0 0 0-12 12v88a12 12 0 0 0 24 0v-88a12 12 0 0 0-12-12m-40 40a12 12 0 0 0-12 12v48a12 12 0 0 0 24 0v-48a12 12 0 0 0-12-12m-40 40a12 12 0 0 0-12 12v8a12 12 0 0 0 24 0v-8a12 12 0 0 0-12-12"/></svg>
-              <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M144 204a16 16 0 1 1-16-16a16 16 0 0 1 16 16m95.61-120.09a176 176 0 0 0-223.22 0a12 12 0 1 0 15.23 18.55a152 152 0 0 1 192.76 0a12 12 0 1 0 15.23-18.55m-32.16 35.73a128 128 0 0 0-158.9 0a12 12 0 0 0 14.9 18.81a104 104 0 0 1 129.1 0a12 12 0 0 0 14.9-18.81m-32.38 35.66a80.05 80.05 0 0 0-94.14 0a12 12 0 0 0 14.14 19.4a56 56 0 0 1 65.86 0a12 12 0 1 0 14.14-19.4"/></svg>
-              <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M196 52H28A28 28 0 0 0 0 80v96a28 28 0 0 0 28 28h168a28 28 0 0 0 28-28V80a28 28 0 0 0-28-28m4 124a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4V80a4 4 0 0 1 4-4h168a4 4 0 0 1 4 4Zm-16-72v48a12 12 0 0 1-24 0v-48a12 12 0 0 1 24 0m-40 0v48a12 12 0 0 1-24 0v-48a12 12 0 0 1 24 0m-40 0v48a12 12 0 0 1-24 0v-48a12 12 0 0 1 24 0m-40 0v48a12 12 0 0 1-24 0v-48a12 12 0 0 1 24 0m192 0v48a12 12 0 0 1-24 0v-48a12 12 0 0 1 24 0"/></svg>
-            </div>
-          </div>
-          <div class="px-4 pt-3">
-            <div class="flex items-center gap-2 mb-3">
-              <img src="assets/icon/icon.png" alt="" width="20" height="20" class="rounded-[6px]" />
-              <span class="font-bold text-sm">LinkDrop</span>
-            </div>
-
-            <div class="card p-3 mb-2.5">
-              <div class="flex items-start gap-2.5">
-                <div class="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center" style="background: var(--accent-tint);">
-                  <svg width="17" height="17" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M200 164v8h12a12 12 0 0 1 0 24h-12v12a12 12 0 0 1-24 0v-56a12 12 0 0 1 12-12h32a12 12 0 0 1 0 24Zm-108 8a32 32 0 0 1-32 32h-4v4a12 12 0 0 1-24 0v-56a12 12 0 0 1 12-12h16a32 32 0 0 1 32 32m-24 0a8 8 0 0 0-8-8h-4v16h4a8 8 0 0 0 8-8m100 8a40 40 0 0 1-40 40h-16a12 12 0 0 1-12-12v-56a12 12 0 0 1 12-12h16a40 40 0 0 1 40 40m-24 0a16 16 0 0 0-16-16h-4v32h4a16 16 0 0 0 16-16M36 108V40a20 20 0 0 1 20-20h96a12 12 0 0 1 8.49 3.52l56 56A12 12 0 0 1 220 88v20a12 12 0 0 1-24 0v-4h-48a12 12 0 0 1-12-12V44H60v64a12 12 0 0 1-24 0m124-51v23h23Z"/></svg>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <p class="text-[0.78rem] font-semibold truncate">quarterly-report.pdf</p>
-                  <p class="text-[0.68rem] mono truncate" style="color: var(--ink-soft);">drive.corp/files/8k2m…</p>
-                  <div class="progress-track mt-1.5"><div class="progress-fill fill-1"></div></div>
-                </div>
-                <span class="status-pill status-done shrink-0">Done</span>
-              </div>
-            </div>
-
-            <div class="card p-3 mb-2.5">
-              <div class="flex items-start gap-2.5">
-                <div class="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center" style="background: var(--accent-tint);">
-                  <svg width="17" height="17" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M144 96a16 16 0 1 1 16 16a16 16 0 0 1-16-16m92-40v144a20 20 0 0 1-20 20H40a20 20 0 0 1-20-20V56a20 20 0 0 1 20-20h176a20 20 0 0 1 20 20M44 60v79.72l33.86-33.86a20 20 0 0 1 28.28 0L147.31 147l17.18-17.17a20 20 0 0 1 28.28 0L212 149.09V60Zm0 136h118.34L92 125.66l-48 48Zm168 0v-13l-33.37-33.37L164.28 164l32 32Z"/></svg>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <p class="text-[0.78rem] font-semibold truncate">site-mockup-v3.png</p>
-                  <p class="text-[0.68rem] mono" style="color: var(--ink-soft);">6.4 MB · 62%</p>
-                  <div class="progress-track mt-1.5"><div class="progress-fill fill-2"></div></div>
-                </div>
-                <span class="status-pill status-active shrink-0">Live</span>
-              </div>
-            </div>
-
-            <div class="card p-3">
-              <div class="flex items-start gap-2.5">
-                <div class="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center" style="background: var(--accent-tint);">
-                  <svg width="17" height="17" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M215.38 14.54a12 12 0 0 0-10.29-2.18l-128 32A12 12 0 0 0 68 56v103.35A40 40 0 1 0 92 196v-82.63l104-26v40A40 40 0 1 0 220 164V24a12 12 0 0 0-4.62-9.46M52 212a16 16 0 1 1 16-16a16 16 0 0 1-16 16M92 88.63V65.37l104-26v23.26ZM180 180a16 16 0 1 1 16-16a16 16 0 0 1-16 16"/></svg>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <p class="text-[0.78rem] font-semibold truncate">set-recording.mp3</p>
-                  <p class="text-[0.68rem] mono" style="color: var(--ink-soft);">18.2 MB</p>
-                </div>
-                <span class="status-pill status-done shrink-0">Done</span>
-              </div>
-            </div>
-          </div>
+  <main>
+    <div>
+      <section id="about" hidden>
+        <div class="sec-head"><h2>About this app</h2>
+          <a class="arrow" id="about-arrow" href="#" aria-label="Source code"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg></a>
         </div>
-      </div>
-    </div>
-  </div>
-</section>
+        <div class="desc" id="description"></div>
+        <div class="updated" id="updated" hidden><div class="l">Updated on</div><div class="v" id="updated-date"></div></div>
+        <div class="chips" id="chips"></div>
+      </section>
 
-<!-- TRUST BAR -->
-<section class="border-y" style="border-color: var(--line);">
-  <div class="container py-6 overflow-hidden">
-    <p class="text-center text-xs font-semibold tracking-wide mb-5" style="color: var(--ink-soft);">Handles links from everywhere you already share from</p>
-    <div class="flex items-center gap-12 opacity-70" style="mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);">
-      <div class="marquee-track gap-12 items-center">
-        <img src="https://cdn.simpleicons.org/googlechrome/141414" alt="Chrome" class="h-6" />
-        <img src="https://cdn.simpleicons.org/googledrive/141414" alt="Google Drive" class="h-6" />
-        <img src="https://cdn.simpleicons.org/dropbox/141414" alt="Dropbox" class="h-6" />
-        <img src="https://cdn.simpleicons.org/whatsapp/141414" alt="WhatsApp" class="h-6" />
-        <img src="https://cdn.simpleicons.org/telegram/141414" alt="Telegram" class="h-6" />
-        <img src="https://cdn.simpleicons.org/x/141414" alt="X" class="h-6" />
-        <img src="https://cdn.simpleicons.org/reddit/141414" alt="Reddit" class="h-6" />
-        <img src="https://cdn.simpleicons.org/gmail/141414" alt="Gmail" class="h-6" />
-        <img src="https://cdn.simpleicons.org/googlechrome/141414" alt="Chrome" class="h-6" />
-        <img src="https://cdn.simpleicons.org/googledrive/141414" alt="Google Drive" class="h-6" />
-        <img src="https://cdn.simpleicons.org/dropbox/141414" alt="Dropbox" class="h-6" />
-        <img src="https://cdn.simpleicons.org/whatsapp/141414" alt="WhatsApp" class="h-6" />
-        <img src="https://cdn.simpleicons.org/telegram/141414" alt="Telegram" class="h-6" />
-        <img src="https://cdn.simpleicons.org/x/141414" alt="X" class="h-6" />
-        <img src="https://cdn.simpleicons.org/reddit/141414" alt="Reddit" class="h-6" />
-        <img src="https://cdn.simpleicons.org/gmail/141414" alt="Gmail" class="h-6" />
-      </div>
-    </div>
-  </div>
-</section>
+      <section id="catalog" hidden>
+        <div class="sec-head"><h2>Apps</h2></div>
+        <div class="apps" id="apps"></div>
+      </section>
 
-<!-- HOW IT WORKS -->
-<section id="how" class="container py-20 md:py-28">
-  <div class="reveal max-w-[38ch] mb-14">
-    <h2 class="text-3xl md:text-[2.6rem] font-bold tracking-tight leading-[1.1]">Three taps, no browser</h2>
-  </div>
-
-  <div class="reveal-stagger grid md:grid-cols-3 gap-6">
-    <div class="lift card p-7">
-      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-6" style="background: var(--accent-tint);">
-        <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="m240.49 103.52l-80-80A12 12 0 0 0 140 32v36.74c-25.76 3.12-53.66 15.89-76.75 35.47c-29.16 24.74-47.32 56.69-51.14 90A16 16 0 0 0 39.67 207c10.46-11.14 47-45.74 100.33-50.42V192a12 12 0 0 0 20.48 8.48l80-80a12 12 0 0 0 .01-16.96M164 163v-19a12 12 0 0 0-12-12c-49 0-86.57 21.56-109.79 40.11c7.13-18.16 19.63-35.22 36.57-49.59C101.3 103.41 128.67 92 152 92a12 12 0 0 0 12-12V61l51 51Z"/></svg>
-      </div>
-      <p class="mono text-xs font-medium mb-2" style="color: var(--ink-soft);">01</p>
-      <h3 class="text-lg font-bold mb-2">Share the link</h3>
-      <p class="text-sm leading-relaxed" style="color: var(--ink-soft);">From any app, hit Share and pick LinkDrop. Works on PDFs, images, videos, audio, and archives.</p>
-    </div>
-
-    <div class="lift card p-7">
-      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-6" style="background: var(--accent-tint);">
-        <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M232.49 215.51L185 168a92.12 92.12 0 1 0-17 17l47.53 47.54a12 12 0 0 0 17-17ZM44 112a68 68 0 1 1 68 68a68.07 68.07 0 0 1-68-68"/></svg>
-      </div>
-      <p class="mono text-xs font-medium mb-2" style="color: var(--ink-soft);">02</p>
-      <h3 class="text-lg font-bold mb-2">LinkDrop checks it</h3>
-      <p class="text-sm leading-relaxed" style="color: var(--ink-soft);">It resolves the real file behind the link, confirms it's reachable, and shows you exactly what you're about to pull down.</p>
-    </div>
-
-    <div class="lift card p-7">
-      <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-6" style="background: var(--accent-tint);">
-        <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M208 28H48a20 20 0 0 0-20 20v160a20 20 0 0 0 20 20h160a20 20 0 0 0 20-20V48a20 20 0 0 0-20-20m-4 24v92h-24.69a19.86 19.86 0 0 0-14.14 5.86L147 168h-38l-18.17-18.14A19.86 19.86 0 0 0 76.69 144H52V52ZM52 204v-36h23l18.14 18.14a19.86 19.86 0 0 0 14.17 5.86h41.38a19.86 19.86 0 0 0 14.14-5.86L181 168h23v36Zm35.51-87.51a12 12 0 0 1 17-17L116 111V76a12 12 0 0 1 24 0v35l11.51-11.52a12 12 0 0 1 17 17l-32 32a12 12 0 0 1-17 0Z"/></svg>
-      </div>
-      <p class="mono text-xs font-medium mb-2" style="color: var(--ink-soft);">03</p>
-      <h3 class="text-lg font-bold mb-2">It lands in your library</h3>
-      <p class="text-sm leading-relaxed" style="color: var(--ink-soft);">Tracked, named, and ready to open — sitting in your Downloads folder like it's always belonged there.</p>
-    </div>
-  </div>
-</section>
-
-<!-- LIBRARY SHOWCASE (full-width, breaks the card pattern) -->
-<section id="library" class="py-20 md:py-28" style="background: var(--ink);">
-  <div class="container">
-    <div class="grid md:grid-cols-[0.9fr_1.1fr] gap-14 items-center">
-      <div class="reveal">
-        <h2 class="text-3xl md:text-[2.4rem] font-bold tracking-tight leading-[1.1]" style="color: var(--paper);">
-          Every download, one list, always findable
-        </h2>
-        <p class="mt-4 text-base leading-relaxed max-w-[42ch]" style="color: #9aa1ab;">
-          No more digging through browser download history or a dozen different apps. Status, size, and source — all in one place on your device.
-        </p>
-        <div class="mt-7 flex flex-wrap gap-2.5">
-          <span class="status-pill" style="background: rgba(255,255,255,0.08); color: #e7e5e0;">
-            <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M216.88 207.93a12 12 0 1 1-17.76 16.14l-51.34-56.47a56.06 56.06 0 0 0-52.71 7.1a12 12 0 0 1-14.14-19.4a79.35 79.35 0 0 1 41.92-15.12l-19.34-21.28a104.2 104.2 0 0 0-40.06 19.55a12 12 0 0 1-14.9-18.81a128.5 128.5 0 0 1 37.06-20.43l-17.31-19a151.1 151.1 0 0 0-36.68 22.28a12 12 0 1 1-15.23-18.58a175.5 175.5 0 0 1 35-22.38L39.12 48.07a12 12 0 1 1 17.76-16.14ZM128 188a16 16 0 1 0 16 16a16 16 0 0 0-16-16m64.55-49.55a12 12 0 0 0 14.9-18.81A127.3 127.3 0 0 0 170 99.05a12 12 0 0 0-7.87 22.67a103.6 103.6 0 0 1 30.42 16.73m47.06-54.54A176.33 176.33 0 0 0 128 44c-3.94 0-7.93.13-11.86.39a12 12 0 1 0 1.59 24c3.4-.23 6.86-.34 10.27-.34a152.24 152.24 0 0 1 96.38 34.46a12 12 0 1 0 15.23-18.55Z"/></svg>
-            Works offline once saved
-          </span>
-          <span class="status-pill" style="background: rgba(255,255,255,0.08); color: #e7e5e0;">
-            <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M208 76h-28V56a52 52 0 0 0-104 0v20H48a20 20 0 0 0-20 20v112a20 20 0 0 0 20 20h160a20 20 0 0 0 20-20V96a20 20 0 0 0-20-20M100 56a28 28 0 0 1 56 0v20h-56Zm104 148H52V100h152Z"/></svg>
-            Nothing leaves your device
-          </span>
+      <section id="news" hidden>
+        <div class="sec-head"><h2>What's new</h2>
+          <a class="arrow" id="news-arrow" href="#" aria-label="Release notes"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg></a>
         </div>
-      </div>
+        <div class="whatsnew" id="whatsnew"></div>
+      </section>
 
-      <div class="reveal" style="transition-delay: 100ms;">
-        <div class="rounded-[20px] overflow-hidden border" style="border-color: rgba(255,255,255,0.1);">
-          <div class="divide-y" style="border-color: rgba(255,255,255,0.08);">
-            <div class="flex items-center gap-3 p-4" style="background: #1a1e24;">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: rgba(47,111,237,0.18);">
-                <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: #6d9bff;"><path fill="currentColor" d="M188 140h-16a12 12 0 0 0-12 12v56a12 12 0 0 0 24 0v-4h4a32 32 0 0 0 0-64m0 40h-4v-16h4a8 8 0 0 1 0 16m-48-28v56a12 12 0 0 1-24 0v-56a12 12 0 0 1 24 0m-44 56a12 12 0 0 1-12 12H52a12 12 0 0 1-10.42-17.95L63.32 164H52a12 12 0 0 1 0-24h32a12 12 0 0 1 10.42 18l-21.74 38H84a12 12 0 0 1 12 12M216.49 79.52l-56-56A12 12 0 0 0 152 20H56a20 20 0 0 0-20 20v68a12 12 0 0 0 24 0V44h76v48a12 12 0 0 0 12 12h48v4a12 12 0 0 0 24 0V88a12 12 0 0 0-3.51-8.48M160 80V57l23 23Z"/></svg>
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold" style="color: #f2f1ee;">design-assets-final.zip</p>
-                <p class="text-xs mono" style="color: #7a828e;">142 MB</p>
-              </div>
-              <span class="status-pill status-done shrink-0">Done</span>
-            </div>
-            <div class="flex items-center gap-3 p-4" style="background: #1a1e24;">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: rgba(47,111,237,0.18);">
-                <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: #6d9bff;"><path fill="currentColor" d="M216 36H40a20 20 0 0 0-20 20v104a20 20 0 0 0 20 20h176a20 20 0 0 0 20-20V56a20 20 0 0 0-20-20m-4 120H44V60h168Zm24 52a12 12 0 0 1-12 12H32a12 12 0 0 1 0-24h192a12 12 0 0 1 12 12m-132-80V88a12 12 0 0 1 18.36-10.18l32 20a12 12 0 0 1 0 20.36l-32 20A12 12 0 0 1 104 128"/></svg>
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold" style="color: #f2f1ee;">talk-recording-oct.mp4</p>
-                <p class="text-xs mono" style="color: #7a828e;">288 MB</p>
-              </div>
-              <span class="status-pill status-done shrink-0">Done</span>
-            </div>
-            <div class="flex items-center gap-3 p-4" style="background: #1a1e24;">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: rgba(47,111,237,0.18);">
-                <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: #6d9bff;"><path fill="currentColor" d="M48 140H32a12 12 0 0 0-12 12v56a12 12 0 0 0 12 12h16a40 40 0 0 0 0-80m0 56h-4v-32h4a16 16 0 0 1 0 32m180.3-3.8a12 12 0 0 1 .37 17A34 34 0 0 1 204 220c-19.85 0-36-17.94-36-40s16.15-40 36-40a34 34 0 0 1 24.67 10.83a12 12 0 0 1-17.34 16.6A10.27 10.27 0 0 0 204 164c-6.5 0-12 7.33-12 16s5.5 16 12 16a10.27 10.27 0 0 0 7.33-3.43a12 12 0 0 1 16.97-.37M128 140c-19.85 0-36 17.94-36 40s16.15 40 36 40s36-17.94 36-40s-16.15-40-36-40m0 56c-6.5 0-12-7.33-12-16s5.5-16 12-16s12 7.33 12 16s-5.5 16-12 16m-80-76a12 12 0 0 0 12-12V44h76v48a12 12 0 0 0 12 12h48v4a12 12 0 0 0 24 0V88a12 12 0 0 0-3.51-8.48l-56-56A12 12 0 0 0 152 20H56a20 20 0 0 0-20 20v68a12 12 0 0 0 12 12m112-63l23 23h-23Z"/></svg>
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold" style="color: #f2f1ee;">lease-agreement.docx</p>
-                <p class="text-xs mono" style="color: #7a828e;">1.1 MB</p>
-              </div>
-              <span class="status-pill status-done shrink-0">Done</span>
-            </div>
-            <div class="flex items-center gap-3 p-4" style="background: #1a1e24;">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: rgba(47,111,237,0.18);">
-                <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: #6d9bff;"><path fill="currentColor" d="M200 164v8h12a12 12 0 0 1 0 24h-12v12a12 12 0 0 1-24 0v-56a12 12 0 0 1 12-12h32a12 12 0 0 1 0 24Zm-108 8a32 32 0 0 1-32 32h-4v4a12 12 0 0 1-24 0v-56a12 12 0 0 1 12-12h16a32 32 0 0 1 32 32m-24 0a8 8 0 0 0-8-8h-4v16h4a8 8 0 0 0 8-8m100 8a40 40 0 0 1-40 40h-16a12 12 0 0 1-12-12v-56a12 12 0 0 1 12-12h16a40 40 0 0 1 40 40m-24 0a16 16 0 0 0-16-16h-4v32h4a16 16 0 0 0 16-16M36 108V40a20 20 0 0 1 20-20h96a12 12 0 0 1 8.49 3.52l56 56A12 12 0 0 1 220 88v20a12 12 0 0 1-24 0v-4h-48a12 12 0 0 1-12-12V44H60v64a12 12 0 0 1-24 0m124-51v23h23Z"/></svg>
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold" style="color: #f2f1ee;">flight-itinerary.pdf</p>
-                <p class="text-xs mono" style="color: #7a828e;">340 KB</p>
-              </div>
-              <span class="status-pill status-done shrink-0">Done</span>
-            </div>
-          </div>
+      <section>
+        <div class="sec-head"><h2>Data safety</h2></div>
+        <div class="safety">
+          <div class="row"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+            <div><div class="t">Open source</div><div class="s">Every line of code is public on GitHub</div></div></div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+            <div><div class="t">No account needed</div><div class="s">Install and use it without signing up</div></div></div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            <div><div class="t">Verified download</div><div class="s">Each release ships with a SHA-256 checksum</div></div></div>
         </div>
-      </div>
-    </div>
-  </div>
-</section>
+      </section>
 
-<!-- WHY THIS EXISTS (bento, breaks zigzag pattern) -->
-<section class="container py-20 md:py-28">
-  <div class="reveal max-w-[40ch] mb-14">
-    <h2 class="text-3xl md:text-[2.6rem] font-bold tracking-tight leading-[1.1]">Built for the moment someone sends you a file</h2>
-  </div>
-
-  <div class="reveal-stagger grid md:grid-cols-3 grid-rows-2 gap-5">
-    <div class="lift card p-8 md:col-span-2 md:row-span-2 flex flex-col justify-between" style="background: linear-gradient(155deg, #eef3ff, #fbfaf8);">
-      <svg width="26" height="26" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M219.71 117.38a12 12 0 0 0-7.25-8.52l-51.18-20.47l10.59-70.61a12 12 0 0 0-20.64-10l-112 120a12 12 0 0 0 4.31 19.33l51.18 20.47l-10.59 70.64a12 12 0 0 0 20.64 10l112-120a12 12 0 0 0 2.94-10.84M113.6 203.55l6.27-41.77a12 12 0 0 0-7.41-12.92l-43.72-17.49l73.66-78.92l-6.27 41.77a12 12 0 0 0 7.41 12.92l43.72 17.49Z"/></svg>
-      <div>
-        <h3 class="text-xl font-bold mb-2">Skips the redirect maze</h3>
-        <p class="text-sm leading-relaxed max-w-[36ch]" style="color: var(--ink-soft);">Shortened links, tracking redirects, wrapped URLs — LinkDrop follows the chain and downloads what's actually at the end of it.</p>
-      </div>
+      <section>
+        <div class="sec-head"><h2>How to install</h2></div>
+        <ol class="steps">
+          <li>Tap <b>Install</b> on your Android phone to download the APK.</li>
+          <li>Open the file. If Android asks, allow your browser to <b>install unknown apps</b>.</li>
+          <li id="step-store">Or install <a href="https://store.itsash.in/">Ash Store</a> once and get every app and its updates from there.</li>
+        </ol>
+      </section>
     </div>
 
-    <div class="lift card p-6 flex flex-col justify-between">
-      <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M200 28h-40a20 20 0 0 0-20 20v160a20 20 0 0 0 20 20h40a20 20 0 0 0 20-20V48a20 20 0 0 0-20-20m-4 176h-32V52h32ZM96 28H56a20 20 0 0 0-20 20v160a20 20 0 0 0 20 20h40a20 20 0 0 0 20-20V48a20 20 0 0 0-20-20m-4 176H60V52h32Z"/></svg>
-      <div>
-        <h3 class="font-bold mb-1.5">Pause & retry</h3>
-        <p class="text-sm leading-relaxed" style="color: var(--ink-soft);">Lost signal mid-download? Pick it back up where it stopped.</p>
-      </div>
-    </div>
+    <aside>
+      <section>
+        <h3>App support</h3>
+        <div class="side-links">
+          <a id="side-github" href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>Source code</a>
+          <a id="side-issues" href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/></svg>Report a problem</a>
+          <a id="side-releases" href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>All versions</a>
+          <a href="https://itsash.in"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>Developer website</a>
+        </div>
+      </section>
+      <section id="more" hidden>
+        <h3>More by itsash.in</h3>
+        <div class="apps" id="more-apps"></div>
+      </section>
+    </aside>
+  </main>
 
-    <div class="lift card p-6 flex flex-col justify-between" style="background: #14181c;">
-      <svg width="22" height="22" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: #6d9bff;"><path fill="currentColor" d="M56.88 31.93a12 12 0 1 0-17.76 16.14l16 17.65C20.67 88.66 5.72 121.58 5 123.13a12.08 12.08 0 0 0 0 9.75c.37.82 9.13 20.26 28.49 39.61C59.37 198.34 92 212 128 212a131.3 131.3 0 0 0 51-10l20.09 22.1a12 12 0 0 0 17.76-16.14ZM128 188c-29.59 0-55.47-10.73-76.91-31.88A130.7 130.7 0 0 1 29.52 128c5.27-9.31 18.79-29.9 42-44.29l90.09 99.11A109.3 109.3 0 0 1 128 188m123-55.12c-.36.81-9 20-28 39.16a12 12 0 1 1-17-16.9A130.5 130.5 0 0 0 226.48 128a130.4 130.4 0 0 0-21.57-28.12C183.46 78.73 157.59 68 128 68c-3.35 0-6.7.14-10 .42a12 12 0 1 1-2-23.91c3.93-.34 8-.51 12-.51c36 0 68.63 13.67 94.49 39.52c19.35 19.35 28.11 38.8 28.48 39.61a12.08 12.08 0 0 1 .03 9.75"/></svg>
-      <div>
-        <h3 class="font-bold mb-1.5" style="color: var(--paper);">No ad detours</h3>
-        <p class="text-sm leading-relaxed" style="color: #9aa1ab;">No landing pages, no fake download buttons, no waiting for a countdown.</p>
-      </div>
-    </div>
-
-    <div class="lift card p-6 md:col-span-2 flex items-center gap-5">
-      <svg width="26" height="26" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent); flex-shrink: 0;"><path fill="currentColor" d="M216 68h-84l-26.67-20a20.12 20.12 0 0 0-12-4H40a20 20 0 0 0-20 20v136a20 20 0 0 0 20 20h176.89A19.13 19.13 0 0 0 236 200.89V88a20 20 0 0 0-20-20m-4 128H44V68h48l28.8 21.6A12 12 0 0 0 128 92h84Z"/></svg>
-      <div>
-        <h3 class="font-bold mb-1">Lands where you'd expect</h3>
-        <p class="text-sm leading-relaxed" style="color: var(--ink-soft);">Saved straight to your device's Downloads folder — any file manager can see it.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- TESTIMONIAL -->
-<section class="border-y" style="border-color: var(--line); background: #f3f1ec;">
-  <div class="container py-20">
-    <div class="reveal max-w-[62ch] mx-auto text-center">
-      <svg width="28" height="28" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="color: var(--accent);"><path fill="currentColor" d="M116 72v88a48.05 48.05 0 0 1-48 48a8 8 0 0 1 0-16a32 32 0 0 0 32-32v-8H40a16 16 0 0 1-16-16V72a16 16 0 0 1 16-16h60a16 16 0 0 1 16 16m100-16h-60a16 16 0 0 0-16 16v64a16 16 0 0 0 16 16h60v8a32 32 0 0 1-32 32a8 8 0 0 0 0 16a48.05 48.05 0 0 0 48-48V72a16 16 0 0 0-16-16"/></svg>
-      <p class="mt-5 text-xl md:text-2xl font-medium leading-snug tracking-tight">
-        I used to email PDFs to myself just to get them off my laptop. Now I just share the link and it's already on my phone.
-      </p>
-      <p class="mt-5 text-sm font-semibold" style="color: var(--ink-soft);">Priya Deshmukh <span class="font-normal">— freelance architect</span></p>
-    </div>
-  </div>
-</section>
-
-<!-- CTA -->
-<section id="get" class="container py-20 md:py-28">
-  <div class="reveal card p-10 md:p-16 text-center relative overflow-hidden" style="background: var(--ink);">
-    <div class="relative">
-      <h2 class="text-3xl md:text-5xl font-bold tracking-tight leading-[1.05]" style="color: var(--paper);">
-        Stop losing files<br class="hidden md:block" /> in your downloads folder
-      </h2>
-      <p class="mt-4 text-base" style="color: #9aa1ab;">Free. No account. Android 8 and up.</p>
-      <div class="mt-8 flex justify-center">
-        <a href="https://github.com/its-ash/linkdrop/releases/latest" class="btn" style="background: var(--paper); color: var(--ink);">
-          <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M207.06 80.67c-.74-.74-1.49-1.46-2.24-2.17l24.84-24.84a8 8 0 0 0-11.32-11.32l-26 26a111.43 111.43 0 0 0-128.55.19L37.66 42.34a8 8 0 0 0-11.32 11.32L51.4 78.72A113.38 113.38 0 0 0 16 161.13V184a16 16 0 0 0 16 16h192a16 16 0 0 0 16-16v-24a111.25 111.25 0 0 0-32.94-79.33M92 160a12 12 0 1 1 12-12a12 12 0 0 1-12 12m72 0a12 12 0 1 1 12-12a12 12 0 0 1-12 12"/></svg>
-          Get it on Android
-        </a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FAQ -->
-<section id="faq" class="container py-20 md:py-28 max-w-[720px]">
-  <div class="reveal mb-12">
-    <h2 class="text-3xl font-bold tracking-tight">Questions</h2>
-  </div>
-
-  <div class="reveal-stagger divide-y" style="border-color: var(--line);">
-    <details class="group py-5" style="border-color: var(--line);">
-      <summary class="flex items-center justify-between cursor-pointer list-none font-semibold text-[0.98rem]">
-        Does LinkDrop work with password-protected links?
-        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 transition-transform duration-200 group-open:rotate-45"><path fill="currentColor" d="M228 128a12 12 0 0 1-12 12h-76v76a12 12 0 0 1-24 0v-76H40a12 12 0 0 1 0-24h76V40a12 12 0 0 1 24 0v76h76a12 12 0 0 1 12 12"/></svg>
-      </summary>
-      <p class="mt-3 text-sm leading-relaxed pr-6" style="color: var(--ink-soft);">Not yet — LinkDrop handles publicly accessible links. If a link needs a login or a token, it'll tell you it can't reach the file instead of failing silently.</p>
-    </details>
-    <details class="group py-5" style="border-color: var(--line);">
-      <summary class="flex items-center justify-between cursor-pointer list-none font-semibold text-[0.98rem]">
-        What file types can it download?
-        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 transition-transform duration-200 group-open:rotate-45"><path fill="currentColor" d="M228 128a12 12 0 0 1-12 12h-76v76a12 12 0 0 1-24 0v-76H40a12 12 0 0 1 0-24h76V40a12 12 0 0 1 24 0v76h76a12 12 0 0 1 12 12"/></svg>
-      </summary>
-      <p class="mt-3 text-sm leading-relaxed pr-6" style="color: var(--ink-soft);">Anything with a direct, downloadable file behind it — documents, images, video, audio, and archives. If the link points to a webpage instead of a file, LinkDrop lets you know rather than guessing.</p>
-    </details>
-    <details class="group py-5" style="border-color: var(--line);">
-      <summary class="flex items-center justify-between cursor-pointer list-none font-semibold text-[0.98rem]">
-        Does it need permissions I should worry about?
-        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 transition-transform duration-200 group-open:rotate-45"><path fill="currentColor" d="M228 128a12 12 0 0 1-12 12h-76v76a12 12 0 0 1-24 0v-76H40a12 12 0 0 1 0-24h76V40a12 12 0 0 1 24 0v76h76a12 12 0 0 1 12 12"/></svg>
-      </summary>
-      <p class="mt-3 text-sm leading-relaxed pr-6" style="color: var(--ink-soft);">Just storage access, to save files to your Downloads folder. LinkDrop doesn't read your other files, browsing history, or contacts.</p>
-    </details>
-    <details class="group py-5" style="border-color: var(--line);">
-      <summary class="flex items-center justify-between cursor-pointer list-none font-semibold text-[0.98rem]">
-        Is it free?
-        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 transition-transform duration-200 group-open:rotate-45"><path fill="currentColor" d="M228 128a12 12 0 0 1-12 12h-76v76a12 12 0 0 1-24 0v-76H40a12 12 0 0 1 0-24h76V40a12 12 0 0 1 24 0v76h76a12 12 0 0 1 12 12"/></svg>
-      </summary>
-      <p class="mt-3 text-sm leading-relaxed pr-6" style="color: var(--ink-soft);">Yes, no account and no paywall.</p>
-    </details>
-  </div>
-</section>
-
-<!-- FOOTER -->
-<footer class="border-t" style="border-color: var(--line);">
-  <div class="container py-10 flex flex-col md:flex-row items-center justify-between gap-4">
-    <div class="flex items-center gap-2.5">
-      <img src="assets/icon/icon.png" alt="" width="22" height="22" class="rounded-[6px]" />
-      <span class="font-bold text-sm">LinkDrop</span>
-    </div>
-    <p class="text-xs" style="color: var(--ink-soft);">Built for Android by <a href="https://itsash.in" class="font-medium hover:text-[var(--ink)] transition-colors" style="color: var(--ink-soft);">itsash.in</a></p>
-  </div>
-</footer>
+  <footer>
+    <span id="foot-name"></span> is open source on <a id="foot-github" href="#">GitHub</a>. Built by <a href="https://itsash.in">itsash.in</a>.
+    Android is a trademark of Google LLC.
+  </footer>
+</div>
 
 <script>
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('is-visible');
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.15 });
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const m = await (await fetch("store.json", { cache: "no-cache" })).json();
+  const gh = `https://github.com/${m.repo}`;
+  const icon = m.icon ? (m.icon.startsWith("http") ? m.icon : m.icon.replace(/^\.?\//, "")) : "";
 
-  document.querySelectorAll('.reveal, .reveal-stagger').forEach((el) => observer.observe(el));
+  document.title = `${m.name}: ${m.tagline}`;
+  document.querySelector('meta[name="description"]').content = m.tagline || "";
+  document.querySelector('link[rel="icon"]').href = icon;
+  for (const id of ["icon", "icon-sm"]) $(id).src = icon;
+  for (const id of ["name", "name-sm", "foot-name"]) $(id).textContent = m.name;
+  $("tagline").textContent = m.tagline || "";
+  for (const id of ["nav-github", "foot-github", "side-github", "about-arrow"]) $(id).href = gh;
+  for (const id of ["nav-releases", "side-releases", "news-arrow"]) $(id).href = `${gh}/releases`;
+  $("side-issues").href = `${gh}/issues`;
+  $("download").href = `${gh}/releases/latest/download/${m.id}.apk`;
+  if (m.category) {
+    $("stat-cat").textContent = m.category; $("stat-cat-li").hidden = false;
+    const c = document.createElement("span"); c.className = "chip"; c.textContent = m.category; $("chips").append(c);
+  }
+  for (const t of ["Android", "Open source"]) {
+    const c = document.createElement("span"); c.className = "chip"; c.textContent = t; $("chips").append(c);
+  }
+  if (m.catalog) { $("store-link").hidden = true; $("step-store").hidden = true; $("more").remove(); }
+  if (m.description || m.tagline) { $("description").textContent = m.description || m.tagline; $("about").hidden = false; }
+
+  const api = (path) => fetch(`https://api.github.com/${path}`, { headers: { Accept: "application/vnd.github+json" } })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const size = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
+
+  const rel = await api(`repos/${m.repo}/releases/latest`);
+  if (rel) {
+    const apk = (rel.assets || []).find((a) => a.name === `${m.id}.apk`) || (rel.assets || []).find((a) => a.name.endsWith(".apk"));
+    if (apk) {
+      $("download").href = apk.browser_download_url;
+      $("stat-size").textContent = size(apk.size); $("stat-size-li").hidden = false;
+    }
+    $("stat-version").textContent = rel.tag_name.replace(/^v/, "");
+    $("updated-date").textContent = new Date(rel.published_at).toLocaleDateString(undefined, { dateStyle: "medium" });
+    $("updated").hidden = false;
+    const notes = (rel.body || "")
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .split("\n")
+      .filter((l) => l.trim() && !/^\*\*Full Changelog\*\*/.test(l))
+      .map((l) => l.replace(/^#+\s*/, "").replace(/^\s*[*-]\s+/, "• ").replace(/\*\*/g, "").replace(/ by @\S+ in https:\/\/\S+/, ""))
+      .join("\n").trim();
+    $("whatsnew").textContent = notes || `${m.name} ${rel.tag_name}`;
+    $("news").hidden = false;
+  }
+
+  const owner = m.repo.split("/")[0];
+  const found = await api(`search/repositories?q=topic:ash-store+user:${owner}&per_page=100`);
+  const apps = (await Promise.all((found?.items || []).map(async (r) => {
+    try {
+      const s = await (await fetch(`https://raw.githubusercontent.com/${r.full_name}/${r.default_branch}/store.json`)).json();
+      if (s.listed === false || s.id === m.id) return null;
+      return { ...s, branch: r.default_branch };
+    } catch { return null; }
+  }))).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+
+  const card = (a) => {
+    const el = document.createElement("a");
+    el.className = "app";
+    el.href = a.homepage || `https://github.com/${a.repo}`;
+    const img = document.createElement("img");
+    img.alt = ""; img.loading = "lazy";
+    img.src = a.icon?.startsWith("http") ? a.icon : `https://raw.githubusercontent.com/${a.repo}/${a.branch}/${a.icon}`;
+    const text = document.createElement("div");
+    text.style.minWidth = "0";
+    for (const [cls, t] of [["name", a.name], ["tag", a.tagline], ["cat", a.category]]) {
+      const d = document.createElement("div"); d.className = cls; d.textContent = t || ""; text.append(d);
+    }
+    el.append(img, text);
+    return el;
+  };
+
+  if (m.catalog) {
+    for (const a of apps) $("apps").append(card(a));
+    $("catalog").hidden = apps.length === 0;
+  } else {
+    for (const a of apps.slice(0, 6)) $("more-apps").append(card(a));
+    $("more").hidden = apps.length === 0;
+  }
+})();
 </script>
-
 </body>
 </html>
