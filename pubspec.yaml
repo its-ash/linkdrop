@@ -38,6 +38,6 @@ flutter:
 
 flutter_launcher_icons:
   android: true
-  image_path: "assets/icon/icon.png"
-  adaptive_icon_background: "#1976D2"
-  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  image_path: "assets/icon/logo-1024.png"
+  adaptive_icon_background: "#12CBE0"
+  adaptive_icon_foreground: "assets/icon/logo_foreground-1024.png"

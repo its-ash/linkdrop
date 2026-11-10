@@ -6,6 +6,6 @@
   "tagline": "Share a link. Get the file.",
   "description": "A share-to-download manager. Share a URL from any app to LinkDrop; it finds the downloadable file behind the link, downloads it and keeps it in a local library you can search and open.",
   "category": "Tools",
-  "icon": "assets/icon/icon.png",
+  "icon": "assets/icon/logo-1024.png",
   "homepage": "https://linkdrop.itsash.in/"
 }
