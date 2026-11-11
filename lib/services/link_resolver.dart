@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+export '../utils/share_parser.dart' show extractUrl;
+
 class ResolvedLink {
   const ResolvedLink({
     required this.url,
@@ -22,11 +24,6 @@ class LinkResolveException implements Exception {
   String toString() => message;
 }
 
-final RegExp _urlPattern = RegExp(r'https?://[^\s]+', caseSensitive: false);
-
-/// Extracts the first http(s) URL from arbitrary shared text.
-String? extractUrl(String sharedText) =>
-    _urlPattern.firstMatch(sharedText.trim())?.group(0);
 
 class LinkResolver {
   LinkResolver(this._dio);

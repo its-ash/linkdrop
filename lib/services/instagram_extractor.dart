@@ -1,7 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+
+import '../utils/share_parser.dart';
+
+const _browserUserAgent =
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
 
 class InstagramExtractException implements Exception {
   InstagramExtractException(this.message);
@@ -23,16 +30,59 @@ class InstagramExtractor {
 
   static final InstagramExtractor instance = InstagramExtractor._();
 
-  static bool isInstagramUrl(String url) {
-    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
-    return host == 'instagram.com' || host.endsWith('.instagram.com');
+  /// Works out which post a shared link points at. Handles plain post links
+  /// directly and follows redirects for instagr.am / ig.me short links and
+  /// `instagram.com/share/reel/ID` links (which the Instagram app shares).
+  Future<InstagramPost> resolvePost(String url, {Dio? dio}) async {
+    final direct = parseInstagramPost(url);
+    if (direct != null) return direct;
+    if (isInstagramStory(url)) {
+      throw InstagramExtractException('Instagram stories can\'t be downloaded (they need a login).');
+    }
+    final client = dio ??
+        Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+          headers: {'User-Agent': _browserUserAgent},
+        ));
+    try {
+      final response = await client.getUri<void>(
+        Uri.parse(url),
+        options: Options(
+          followRedirects: true,
+          maxRedirects: 8,
+          validateStatus: (_) => true,
+          responseType: ResponseType.stream,
+          headers: {'User-Agent': _browserUserAgent},
+        ),
+      );
+      final finalUrl = response.realUri.toString();
+      final post = parseInstagramPost(finalUrl);
+      if (post != null) return post;
+    } on DioException catch (e) {
+      throw InstagramExtractException('Could not open the Instagram link (${e.type.name}).');
+    }
+    throw InstagramExtractException(
+      "Couldn't find a post in this Instagram link. It may be a profile, a story, or private.",
+    );
   }
 
-  /// Renders [postUrl] in a hidden WebView and resolves to the direct media
-  /// URL once found, or throws [InstagramExtractException] if the post
-  /// isn't public, doesn't exist, or no media could be located in time.
+  /// Resolves [postUrl] to a direct media URL, retrying once on a transient
+  /// WebView failure (Instagram is flaky about the first load).
   Future<String> extractMediaUrl(String postUrl) async {
-    final embedUrl = _toEmbedUrl(postUrl);
+    final post = await resolvePost(postUrl);
+    try {
+      return await _renderAndExtract(post);
+    } on InstagramExtractException {
+      return _renderAndExtract(post);
+    }
+  }
+
+  /// Renders the post's embed page in a hidden WebView and resolves to the
+  /// direct media URL once found, or throws [InstagramExtractException] if the
+  /// post isn't public, doesn't exist, or no media could be located in time.
+  Future<String> _renderAndExtract(InstagramPost post) async {
+    final embedUrl = post.embedUrl;
     final completer = Completer<String>();
     late final WebViewController controller;
     Timer? timeoutTimer;
@@ -56,10 +106,7 @@ class InstagramExtractor {
 
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(
-        'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-      )
+      ..setUserAgent(_browserUserAgent)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (_) {
@@ -80,9 +127,13 @@ class InstagramExtractor {
                 return;
               }
               try {
-                final raw = await controller.runJavaScriptReturningResult(_extractScript);
+                // Only fall back to the still image once the video had a fair
+                // chance to render, otherwise a reel saves as its thumbnail.
+                final raw = await controller.runJavaScriptReturningResult(
+                  attempts >= 8 ? _extractScriptWithImage : _extractScript,
+                );
                 final decoded = _decodeJsResult(raw);
-                if (decoded != null && decoded.isNotEmpty) {
+                if (decoded != null && decoded.isNotEmpty && !decoded.startsWith('blob:')) {
                   timer.cancel();
                   finishSuccess(decoded);
                 }
@@ -111,19 +162,6 @@ class InstagramExtractor {
     }
   }
 
-  String _toEmbedUrl(String postUrl) {
-    final uri = Uri.parse(postUrl);
-    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
-    // Strip a leading username segment for profile-style URLs (/user/reel/CODE/).
-    final kindIndex = segments.indexWhere((s) => s == 'p' || s == 'reel' || s == 'tv');
-    if (kindIndex == -1 || kindIndex + 1 >= segments.length) {
-      throw InstagramExtractException('Not a recognizable Instagram post link.');
-    }
-    final kind = segments[kindIndex];
-    final code = segments[kindIndex + 1];
-    return 'https://www.instagram.com/$kind/$code/embed/captioned/';
-  }
-
   String? _decodeJsResult(Object? raw) {
     if (raw == null) return null;
     var text = raw.toString();
@@ -150,8 +188,22 @@ class InstagramExtractor {
   var meta = document.querySelector('meta[property="og:video"]') ||
              document.querySelector('meta[property="og:video:secure_url"]');
   if (meta && meta.content) { return meta.content; }
-  var img = document.querySelector('meta[property="og:image"]');
-  if (img && img.content) { return img.content; }
+  return null;
+})();
+''';
+
+  static const _extractScriptWithImage = r'''
+(function() {
+  var video = document.querySelector('video');
+  if (video && video.src) { return video.src; }
+  var source = document.querySelector('video source');
+  if (source && source.src) { return source.src; }
+  var meta = document.querySelector('meta[property="og:video"]') ||
+             document.querySelector('meta[property="og:video:secure_url"]');
+  if (meta && meta.content) { return meta.content; }
+  var img = document.querySelector('.EmbeddedMediaImage') ||
+            document.querySelector('meta[property="og:image"]');
+  if (img && (img.src || img.content)) { return img.src || img.content; }
   return null;
 })();
 ''';

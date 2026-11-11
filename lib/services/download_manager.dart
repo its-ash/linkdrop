@@ -10,6 +10,7 @@ import '../models/download_item.dart';
 import 'database_service.dart';
 import 'instagram_extractor.dart';
 import 'link_resolver.dart';
+import '../utils/share_parser.dart';
 
 class DownloadManager {
   DownloadManager._()
@@ -52,6 +53,14 @@ class DownloadManager {
     unawaited(DatabaseService.instance.upsert(item));
   }
 
+  /// True while a download for the same (normalized) link is still running.
+  bool isInProgress(String url) {
+    final key = normalizeUrl(url);
+    return _items.any((e) =>
+        (e.status == DownloadStatus.resolving || e.status == DownloadStatus.downloading) &&
+        normalizeUrl(e.url) == key);
+  }
+
   /// Kicks off resolution + download for a raw shared URL string.
   Future<void> startFromSharedUrl(String url) async {
     final id = const Uuid().v4();
@@ -67,9 +76,13 @@ class DownloadManager {
 
     try {
       var resolveUrl = url;
-      if (InstagramExtractor.isInstagramUrl(url)) {
+      var postUrl = url;
+      if (isInstagramUrl(url)) {
         try {
-          resolveUrl = await InstagramExtractor.instance.extractMediaUrl(url);
+          // Follows short/share links to the real post so the file name and
+          // embed lookup use the post code, not the share token.
+          postUrl = (await InstagramExtractor.instance.resolvePost(url)).canonicalUrl;
+          resolveUrl = await InstagramExtractor.instance.extractMediaUrl(postUrl);
         } on InstagramExtractException catch (e) {
           item = item.copyWith(status: DownloadStatus.failed, errorMessage: e.message);
           _update(item);
@@ -79,8 +92,8 @@ class DownloadManager {
 
       final resolved = await _resolver.resolve(resolveUrl);
       final dir = await _downloadsDirectory();
-      final fileName = InstagramExtractor.isInstagramUrl(url)
-          ? _instagramFileName(url, resolved.mimeType)
+      final fileName = isInstagramUrl(url)
+          ? _instagramFileName(postUrl, resolved.mimeType)
           : resolved.fileName;
       final targetPath = await _uniquePath(dir, fileName);
 
@@ -233,10 +246,7 @@ class DownloadManager {
   }
 
   String _instagramFileName(String postUrl, String? mimeType) {
-    final uri = Uri.tryParse(postUrl);
-    final segments = uri?.pathSegments.where((s) => s.isNotEmpty).toList() ?? [];
-    final kindIndex = segments.indexWhere((s) => s == 'p' || s == 'reel' || s == 'tv');
-    final code = (kindIndex != -1 && kindIndex + 1 < segments.length) ? segments[kindIndex + 1] : 'instagram';
+    final code = parseInstagramPost(postUrl)?.code ?? 'instagram_${DateTime.now().millisecondsSinceEpoch}';
     final ext = mimeType == 'image/jpeg' || mimeType == 'image/webp' ? 'jpg' : 'mp4';
     return 'instagram_$code.$ext';
   }

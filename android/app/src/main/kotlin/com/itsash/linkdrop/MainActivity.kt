@@ -14,7 +14,11 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         channel?.setMethodCallHandler { call, result ->
             if (call.method == "getInitialText") {
-                result.success(extractSharedText(intent))
+                val text = extractSharedText(intent)
+                // Consume it so an activity re-creation (rotation, process
+                // restore) doesn't replay the same share.
+                if (text != null) intent?.removeExtra(Intent.EXTRA_TEXT)
+                result.success(text)
             } else {
                 result.notImplemented()
             }

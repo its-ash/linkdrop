@@ -10,6 +10,7 @@ import '../services/link_resolver.dart';
 import '../services/share_intent_service.dart';
 import '../widgets/download_tile.dart';
 import '../widgets/share_confirm_sheet.dart';
+import 'settings_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -30,8 +31,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _itemsSub = DownloadManager.instance.itemsStream.listen((items) => setState(() => _items = items));
     _shareSub = ShareIntentService.instance.sharedText.listen(_handleSharedText);
     final pending = ShareIntentService.instance.consumePending();
-    if (pending != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _handleSharedText(pending));
+    if (pending.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final text in pending) {
+          _handleSharedText(text);
+        }
+      });
     }
   }
 
@@ -52,8 +57,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
     if (!mounted) return;
     final confirmed = await ShareConfirmSheet.show(context, url);
-    if (confirmed) {
-      unawaited(DownloadManager.instance.startFromSharedUrl(url));
+    if (confirmed && mounted) {
+      if (DownloadManager.instance.isInProgress(url)) {
+        context.showToast('Already downloading this link.', status: UiStatus.info);
+      } else {
+        unawaited(DownloadManager.instance.startFromSharedUrl(url));
+      }
     }
   }
 
@@ -80,7 +89,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const UiAppBar(title: 'LinkDrop'),
+      appBar: UiAppBar(
+        title: 'LinkDrop',
+        actions: [
+          UiIconButton(
+            Icons.settings_outlined,
+            tooltip: 'Settings',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
+        ],
+      ),
       body: _items.isEmpty
           ? const UiEmptyState(
               title: 'No downloads yet',

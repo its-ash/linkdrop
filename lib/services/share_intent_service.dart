@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
+import '../utils/share_inbox.dart';
+
 class ShareIntentService {
   ShareIntentService._();
 
@@ -10,23 +12,14 @@ class ShareIntentService {
 
   static const _channel = MethodChannel('linkdrop/share_text');
 
-  final _controller = StreamController<String>.broadcast();
-  Stream<String> get sharedText => _controller.stream;
+  final _inbox = ShareInbox();
+  Stream<String> get sharedText => _inbox.stream;
 
   StreamSubscription<List<SharedMediaFile>>? _mediaSub;
-  String? _lastEmitted;
 
-  /// The most recent shared text not yet consumed by a listener. `init()`
-  /// runs (and may receive a cold-start share) before `LibraryScreen` has
-  /// mounted and subscribed to [sharedText], so a plain broadcast stream
-  /// would drop it. Callers should read and clear this on mount.
-  String? consumePending() {
-    final value = _pending;
-    _pending = null;
-    return value;
-  }
-
-  String? _pending;
+  /// Shares received before `LibraryScreen` subscribed (cold start).
+  /// Callers should read and clear this on mount.
+  List<String> consumePending() => _inbox.consumePending();
 
   /// Registers listeners for both a cold-start share (app launched via the
   /// share sheet) and subsequent shares while the app is already running.
@@ -38,48 +31,43 @@ class ShareIntentService {
   Future<void> init() async {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onSharedText') {
-        _emit(call.arguments as String);
+        _inbox.add(call.arguments as String);
       }
     });
 
-    final initialNative = await _channel.invokeMethod<String>('getInitialText');
-    if (initialNative != null && initialNative.isNotEmpty) {
-      _emit(initialNative);
-    }
+    // Never let a failing native/plugin call abort app start-up (and with it
+    // the share that launched us).
+    try {
+      final initialNative = await _channel.invokeMethod<String>('getInitialText');
+      if (initialNative != null && initialNative.isNotEmpty) {
+        _inbox.add(initialNative);
+      }
+    } catch (_) {}
 
-    final initial = await ReceiveSharingIntent.instance.getInitialMedia();
-    for (final file in initial) {
-      _emitIfText(file);
-    }
-    ReceiveSharingIntent.instance.reset();
+    try {
+      final initial = await ReceiveSharingIntent.instance.getInitialMedia();
+      for (final file in initial) {
+        _emitIfText(file);
+      }
+      ReceiveSharingIntent.instance.reset();
+    } catch (_) {}
 
     _mediaSub = ReceiveSharingIntent.instance.getMediaStream().listen((files) {
       for (final file in files) {
         _emitIfText(file);
       }
-    });
+    }, onError: (_) {});
   }
 
   void _emitIfText(SharedMediaFile file) {
-    final isTextLike =
-        file.type == SharedMediaType.text || file.type == SharedMediaType.url;
+    final isTextLike = file.type == SharedMediaType.text || file.type == SharedMediaType.url;
     if (isTextLike && file.path.isNotEmpty) {
-      _emit(file.path);
-    }
-  }
-
-  void _emit(String text) {
-    if (text == _lastEmitted) return;
-    _lastEmitted = text;
-    if (_controller.hasListener) {
-      _controller.add(text);
-    } else {
-      _pending = text;
+      _inbox.add(file.path);
     }
   }
 
   void dispose() {
     _mediaSub?.cancel();
-    _controller.close();
+    _inbox.dispose();
   }
 }
