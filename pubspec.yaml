@@ -1,7 +1,7 @@
 name: linkdrop
 description: "LinkDrop — share-to-download manager."
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: ^3.12.2
@@ -39,5 +39,5 @@ flutter:
 flutter_launcher_icons:
   android: true
   image_path: "assets/icon/logo-1024.png"
-  adaptive_icon_background: "#12CBE0"
+  adaptive_icon_background: "assets/icon/logo_background-1024.png"
   adaptive_icon_foreground: "assets/icon/logo_foreground-1024.png"
