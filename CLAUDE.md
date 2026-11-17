@@ -9,9 +9,16 @@ Flutter Android app: share-to-download manager. Receives a URL via the Android S
 
 ## Structure
 - `lib/models` — `DownloadItem` + status enum.
-- `lib/services` — `ShareIntentService` (share sheet), `LinkResolver` (probes a URL for filename/mime/size), `DownloadManager` (orchestrates + persists downloads), `DatabaseService` (sqflite).
+- `lib/services` — `ShareIntentService` (share sheet), `LinkResolver` (probes a URL for filename/mime/size), `DownloadManager` (orchestrates + persists downloads), `DatabaseService` (sqflite), `ParallelDownloader` (multi-connection Range download with per-chunk retry/resume; single-connection fallback), `InstagramExtractor` (pure Dart) + `instagram_webview.dart` (last-resort hidden WebView fetch).
 - `lib/screens/library_screen.dart` — main/only screen: download list + share-confirm flow.
 - `lib/widgets` — `DownloadTile`, `ShareConfirmSheet`.
+- `tool/ig_check.dart` — desktop CLI to test Instagram extraction + download.
+
+## Instagram
+- `InstagramExtractor.resolvePost` follows share/short links (curl UA first: browser UAs get HTML instead of a redirect). `extractMedia` tries, in order: post page with a **desktop** Chrome UA (JSON at `xig_polaris_media.if_not_gated_logged_out`; a mobile UA gets no data), logged-out GraphQL by media id (`PolarisLoggedOutDesktopWWWPostRootContentQuery`) and by shortcode (`PolarisPostActionLoadPostQueryQuery`), the embed page, the post page with a curl UA, then the WebView. `mediaFromAnyJson` handles both the new (`video_versions`/`carousel_media`) and old (`video_url`/`edge_sidecar_to_children`) shapes. If Instagram changes again, update the doc_ids from yt-dlp's / cobalt's Instagram extractors.
+- Debug from the Mac: `dart run tool/ig_check.dart [--download <dir>] '<url>'` prints which source worked. Instagram rate-limits GraphQL per IP (401 "Please wait") after many probes.
+- Carousels become one library item per slide (`?img_index=N` link, `instagram_<code>_<N>.<ext>`). Files download to `<name>.part` and are renamed on completion.
+- Tests: `flutter test` (`test/instagram_test.dart` parsers, `test/parallel_downloader_test.dart` against a local server).
 
 ## Conventions
 - compileSdk is pinned to 37 in `android/app/build.gradle.kts` (required by `receive_sharing_intent`; keep in sync if the plugin bumps it further).

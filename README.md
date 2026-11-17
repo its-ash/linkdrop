@@ -8,6 +8,10 @@ Share a link. Get the file.
 
 - **Share to download**: share a URL from any app through the Android share
   sheet. LinkDrop finds the downloadable file behind it and downloads it.
+- **Instagram**: share a reel or post (including `/share/` links) to save its
+  video or photos in full quality, every slide of a carousel included. No login.
+- **Fast downloads**: big files are fetched over up to 8 connections at once,
+  and dropped connections resume where they stopped.
 - **Library**: every download is kept in a local library you can browse and open.
 - **No account**: everything stays on your phone.
 
@@ -24,6 +28,12 @@ Needs Flutter ≥ 3.44 and the shared theme package.
 make run      # flutter run
 make build    # release APK
 make deploy   # bump version, build, tag, push, GitHub release (see store.mk)
+```
+
+Check Instagram extraction from the desktop, without a phone:
+
+```bash
+dart run tool/ig_check.dart --download /tmp/ig 'https://www.instagram.com/reel/<code>/'
 ```
 
 To try the share flow, share a link (a direct image, PDF or video URL) to
@@ -49,9 +59,10 @@ lib/
 ├── main.dart
 ├── models/
 ├── screens/      # library screen and friends
-├── services/     # download manager, share intent
+├── services/     # download manager, Instagram extractor, parallel downloader
 ├── utils/
 └── widgets/
+tool/ig_check.dart  # command-line Instagram extraction check
 index.html        # landing page (GitHub Pages, linkdrop.itsash.in)
 ```
 

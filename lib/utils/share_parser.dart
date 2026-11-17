@@ -78,6 +78,14 @@ InstagramPost? _fromSegments(List<String> raw) {
 /// (instagr.am / ig.me short links, `/share/reel/ID` links).
 bool instagramNeedsRedirect(String url) => isInstagramUrl(url) && parseInstagramPost(url) == null;
 
+/// The 1-based carousel slide a link points at (`?img_index=3`), or null for
+/// the whole post.
+int? instagramSlideIndex(String url) {
+  final raw = Uri.tryParse(url)?.queryParameters['img_index'];
+  final index = raw == null ? null : int.tryParse(raw);
+  return index != null && index > 0 ? index : null;
+}
+
 bool isInstagramStory(String url) => (Uri.tryParse(url)?.pathSegments ?? const <String>[]).contains('stories');
 
 /// Canonical form used for duplicate detection: lower-case host, no

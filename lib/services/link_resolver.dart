@@ -90,8 +90,8 @@ class LinkResolver {
     if (!isAttachment && (contentType == 'text/html' || contentType == 'application/xhtml+xml')) {
       throw LinkResolveException(
         "This link points to a web page, not a downloadable file. LinkDrop can't pull "
-        'videos or posts out of sites like Instagram, YouTube, or Twitter/X — only '
-        'direct file links.',
+        'videos out of sites like YouTube or Twitter/X — only Instagram posts/reels '
+        'and direct file links.',
       );
     }
 

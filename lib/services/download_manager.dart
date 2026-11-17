@@ -9,7 +9,9 @@ import 'package:uuid/uuid.dart';
 import '../models/download_item.dart';
 import 'database_service.dart';
 import 'instagram_extractor.dart';
+import 'instagram_webview.dart';
 import 'link_resolver.dart';
+import 'parallel_downloader.dart';
 import '../utils/share_parser.dart';
 
 class DownloadManager {
@@ -17,17 +19,22 @@ class DownloadManager {
     : _dio = Dio(
         BaseOptions(
           connectTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(minutes: 30),
+          // Per read, not for the whole file: a stalled connection is retried.
+          receiveTimeout: const Duration(seconds: 30),
         ),
       ) {
     _resolver = LinkResolver(_dio);
+    _downloader = ParallelDownloader(_dio);
+    InstagramExtractor.instance.browserFetch = fetchWithWebView;
   }
 
   static final DownloadManager instance = DownloadManager._();
 
   final Dio _dio;
   late final LinkResolver _resolver;
+  late final ParallelDownloader _downloader;
   final Map<String, CancelToken> _cancelTokens = {};
+  final Map<String, DateTime> _lastProgressSave = {};
 
   final _itemsController = StreamController<List<DownloadItem>>.broadcast();
   Stream<List<DownloadItem>> get itemsStream => _itemsController.stream;
@@ -53,6 +60,19 @@ class DownloadManager {
     unawaited(DatabaseService.instance.upsert(item));
   }
 
+  /// Progress ticks arrive many times a second from several connections:
+  /// refresh the UI at most ~6 times a second and skip the database.
+  void _progress(DownloadItem item) {
+    final now = DateTime.now();
+    final last = _lastProgressSave[item.id];
+    if (last != null && now.difference(last) < const Duration(milliseconds: 150)) return;
+    _lastProgressSave[item.id] = now;
+    final idx = _items.indexWhere((e) => e.id == item.id);
+    if (idx < 0) return;
+    _items[idx] = item;
+    _emit();
+  }
+
   /// True while a download for the same (normalized) link is still running.
   bool isInProgress(String url) {
     final key = normalizeUrl(url);
@@ -74,92 +94,155 @@ class DownloadManager {
     );
     _update(item);
 
+    if (isInstagramUrl(url)) {
+      await _startInstagram(item);
+      return;
+    }
+
     try {
-      var resolveUrl = url;
-      var postUrl = url;
-      if (isInstagramUrl(url)) {
-        try {
-          // Follows short/share links to the real post so the file name and
-          // embed lookup use the post code, not the share token.
-          postUrl = (await InstagramExtractor.instance.resolvePost(url)).canonicalUrl;
-          resolveUrl = await InstagramExtractor.instance.extractMediaUrl(postUrl);
-        } on InstagramExtractException catch (e) {
-          item = item.copyWith(status: DownloadStatus.failed, errorMessage: e.message);
-          _update(item);
-          return;
-        }
-      }
-
-      final resolved = await _resolver.resolve(resolveUrl);
+      final resolved = await _resolver.resolve(url);
       final dir = await _downloadsDirectory();
-      final fileName = isInstagramUrl(url)
-          ? _instagramFileName(postUrl, resolved.mimeType)
-          : resolved.fileName;
-      final targetPath = await _uniquePath(dir, fileName);
+      final targetPath = await _uniquePath(dir, resolved.fileName);
+      item = item.copyWith(mimeType: resolved.mimeType, totalBytes: resolved.totalBytes);
+      await _download(item, resolved.url, targetPath);
+    } on LinkResolveException catch (e) {
+      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.message));
+    } catch (e) {
+      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.toString()));
+    }
+  }
 
-      item = item.copyWith(
-        fileName: p.basename(targetPath),
-        filePath: targetPath,
-        mimeType: resolved.mimeType,
-        totalBytes: resolved.totalBytes,
-        status: DownloadStatus.downloading,
+  /// Instagram post/reel: find the media behind the post, then download each
+  /// file (a carousel becomes one library entry per slide).
+  Future<void> _startInstagram(DownloadItem item) async {
+    final List<InstagramMedia> media;
+    final InstagramPost post;
+    try {
+      post = await InstagramExtractor.instance.resolvePost(item.url);
+      final all = await InstagramExtractor.instance.extractMedia(post);
+      final slide = instagramSlideIndex(item.url);
+      media = slide != null && slide <= all.length && all.length > 1 ? [all[slide - 1]] : all;
+    } on InstagramExtractException catch (e) {
+      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.message));
+      return;
+    } catch (e) {
+      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: 'Could not read the Instagram post: $e'));
+      return;
+    }
+
+    final dir = await _downloadsDirectory();
+    final slide = instagramSlideIndex(item.url);
+    final jobs = <Future<void>>[];
+    for (var i = 0; i < media.length; i++) {
+      final m = media[i];
+      // One library entry per slide; each keeps a link to just its slide so
+      // Retry re-downloads that slide only.
+      final number = media.length > 1 ? i + 1 : slide;
+      final entry = i == 0
+          ? item
+          : DownloadItem(
+              id: const Uuid().v4(),
+              url: '${post.canonicalUrl}?img_index=$number',
+              fileName: '',
+              filePath: '',
+              status: DownloadStatus.resolving,
+              createdAt: DateTime.now(),
+            );
+      final name = number == null ? 'instagram_${post.code}.${m.extension}' : 'instagram_${post.code}_$number.${m.extension}';
+      final targetPath = await _uniquePath(dir, name);
+      jobs.add(
+        _download(
+          entry.copyWith(mimeType: m.mimeType),
+          m.url,
+          targetPath,
+          headers: const {'User-Agent': instagramDesktopUserAgent, 'Referer': 'https://www.instagram.com/'},
+        ),
       );
-      _update(item);
+    }
+    await Future.wait(jobs);
+  }
 
-      final cancelToken = CancelToken();
-      _cancelTokens[id] = cancelToken;
+  /// Downloads [url] into [targetPath] (through a `.part` file, renamed when
+  /// complete) over several connections, keeping [item] up to date.
+  Future<void> _download(
+    DownloadItem item,
+    String url,
+    String targetPath, {
+    Map<String, String> headers = const {},
+  }) async {
+    final id = item.id;
+    final partPath = '$targetPath.part';
+    item = item.copyWith(
+      fileName: p.basename(targetPath),
+      filePath: targetPath,
+      status: DownloadStatus.downloading,
+      receivedBytes: 0,
+    );
+    _update(item);
 
-      await _dio.download(
-        resolved.url,
-        targetPath,
+    final cancelToken = CancelToken();
+    _cancelTokens[id] = cancelToken;
+    try {
+      final savedBytes = await _downloader.download(
+        url,
+        partPath,
+        headers: headers,
         cancelToken: cancelToken,
-        onReceiveProgress: (received, total) {
-          item = item.copyWith(
-            receivedBytes: received,
-            totalBytes: total > 0 ? total : item.totalBytes,
-          );
-          _update(item);
+        onProgress: (received, total) {
+          item = item.copyWith(receivedBytes: received, totalBytes: total > 0 ? total : item.totalBytes);
+          _progress(item);
         },
       );
-
-      final savedFile = File(targetPath);
-      final savedBytes = await savedFile.length();
       if (savedBytes == 0) {
-        await savedFile.delete();
-        item = item.copyWith(
-          status: DownloadStatus.failed,
-          errorMessage: 'The server returned an empty file. This link may not point to a real download.',
+        await _deleteIfExists(partPath);
+        _update(
+          item.copyWith(
+            status: DownloadStatus.failed,
+            errorMessage: 'The server returned an empty file. This link may not point to a real download.',
+          ),
         );
-        _update(item);
         return;
       }
-
-      item = item.copyWith(status: DownloadStatus.completed, receivedBytes: savedBytes, totalBytes: savedBytes);
-      _update(item);
-    } on LinkResolveException catch (e) {
-      item = item.copyWith(
-        status: DownloadStatus.failed,
-        errorMessage: e.message,
-      );
-      _update(item);
+      await File(partPath).rename(targetPath);
+      _update(item.copyWith(status: DownloadStatus.completed, receivedBytes: savedBytes, totalBytes: savedBytes));
     } on DioException catch (e) {
+      await _deleteIfExists(partPath);
       final canceled = e.type == DioExceptionType.cancel;
-      item = item.copyWith(
-        status: canceled ? DownloadStatus.canceled : DownloadStatus.failed,
-        errorMessage: canceled
-            ? null
-            : 'Download failed: ${e.message ?? e.type.name}',
+      _update(
+        item.copyWith(
+          status: canceled ? DownloadStatus.canceled : DownloadStatus.failed,
+          errorMessage: canceled ? null : 'Download failed: ${_describe(e)}',
+        ),
       );
-      _update(item);
     } catch (e) {
-      item = item.copyWith(
-        status: DownloadStatus.failed,
-        errorMessage: e.toString(),
-      );
-      _update(item);
+      await _deleteIfExists(partPath);
+      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: 'Download failed: $e'));
     } finally {
       _cancelTokens.remove(id);
+      _lastProgressSave.remove(id);
     }
+  }
+
+  String _describe(DioException e) {
+    final code = e.response?.statusCode;
+    if (code == 403 || code == 410) return 'the link expired (HTTP $code). Share it again to retry.';
+    if (code != null) return 'HTTP $code';
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'the connection timed out.';
+      case DioExceptionType.connectionError:
+        return 'no connection.';
+      default:
+        return e.message ?? e.type.name;
+    }
+  }
+
+  Future<void> _deleteIfExists(String path) async {
+    try {
+      final f = File(path);
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
   }
 
   void cancel(String id) {
@@ -190,6 +273,7 @@ class DownloadManager {
       if (await file.exists() && item.status != DownloadStatus.completed) {
         await file.delete();
       }
+      await _deleteIfExists('${item.filePath}.part');
     }
     _items.removeWhere((e) => e.id == id);
     _emit();
@@ -245,9 +329,4 @@ class DownloadManager {
     return segments.isNotEmpty ? segments.last : 'download';
   }
 
-  String _instagramFileName(String postUrl, String? mimeType) {
-    final code = parseInstagramPost(postUrl)?.code ?? 'instagram_${DateTime.now().millisecondsSinceEpoch}';
-    final ext = mimeType == 'image/jpeg' || mimeType == 'image/webp' ? 'jpg' : 'mp4';
-    return 'instagram_$code.$ext';
-  }
 }
