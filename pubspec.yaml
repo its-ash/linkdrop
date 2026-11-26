@@ -13,7 +13,7 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   theme:
-    path: /Users/ashvinijangid/Desktop/android/theme
+    path: ../theme
 
   receive_sharing_intent: ^1.8.1
   dio: ^5.9.0

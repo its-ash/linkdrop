@@ -7,10 +7,11 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return UiScaffold(
       appBar: const UiAppBar(title: 'Settings'),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: UiSpace.lg),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           UiListGroup(
             header: 'About',

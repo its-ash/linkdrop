@@ -37,12 +37,14 @@ Future<String?> fetchWithWebView(Uri url, String userAgent) async {
     ..setNavigationDelegate(
       NavigationDelegate(
         onPageFinished: (_) {
+          if (completer.isCompleted) return;
           poll?.cancel();
           poll = Timer.periodic(const Duration(milliseconds: 700), (_) async {
+            if (completer.isCompleted) return;
             attempts++;
             try {
               final html = await snapshot();
-              if (html == null) return;
+              if (html == null || completer.isCompleted) return;
               final ready =
                   html.contains('<!--linkdrop-video:') ||
                   html.contains('"video_versions"') ||
@@ -53,6 +55,7 @@ Future<String?> fetchWithWebView(Uri url, String userAgent) async {
           });
         },
         onWebResourceError: (error) {
+          if (completer.isCompleted) return;
           if (error.isForMainFrame ?? false) finish(null);
         },
       ),
@@ -70,6 +73,9 @@ Future<String?> fetchWithWebView(Uri url, String userAgent) async {
   try {
     return await completer.future;
   } finally {
+    poll?.cancel();
+    timeout.cancel();
+    unawaited(controller.setNavigationDelegate(NavigationDelegate()).catchError((_) {}));
     unawaited(controller.loadRequest(Uri.parse('about:blank')).catchError((_) {}));
     unawaited(controller.clearCache().catchError((_) {}));
   }

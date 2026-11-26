@@ -704,10 +704,10 @@ packages:
   theme:
     dependency: "direct main"
     description:
-      path: "/Users/ashvinijangid/Desktop/android/theme"
-      relative: false
+      path: "../theme"
+      relative: true
     source: path
-    version: "4.0.0"
+    version: "5.0.0"
   typed_data:
     dependency: transitive
     description:

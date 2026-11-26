@@ -88,71 +88,74 @@ class ParallelDownloader {
     final file = File(savePath);
     await file.parent.create(recursive: true);
     final raf = await file.open(mode: FileMode.write);
-    var received = 0;
-    var writeLock = Future<void>.value();
-
-    // RandomAccessFile allows one pending operation at a time: serialize writes.
-    Future<void> write(int position, Uint8List bytes) {
-      final next = writeLock.then((_) async {
-        await raf.setPosition(position);
-        await raf.writeFrom(bytes);
-      });
-      writeLock = next.catchError((_) {});
-      return next;
-    }
-
-    var nextChunk = 0;
     Object? failure;
     StackTrace? failureStack;
-    // One token for all workers: tripped by the caller's token or by the first
-    // worker that gives up, so the others stop instead of finishing their chunk.
-    final abort = CancelToken();
-    unawaited(cancelToken?.whenCancel.then((_) => abort.cancel()));
+    try {
+      var received = 0;
+      var writeLock = Future<void>.value();
 
-    Future<void> worker() async {
-      while (!abort.isCancelled && nextChunk < chunks.length) {
-        final chunk = chunks[nextChunk++];
-        var attempt = 0;
-        while (true) {
-          if (abort.isCancelled) return;
-          try {
-            await _fetchChunk(url, chunk, headers, abort, (bytes) async {
-              await write(chunk.start + chunk.done, bytes);
-              chunk.done += bytes.length;
-              received += bytes.length;
-              onProgress?.call(received, total);
-            });
-            break;
-          } on DioException catch (e) {
-            if (e.type == DioExceptionType.cancel) return;
-            if (++attempt > maxRetries) rethrow;
-          } on HttpException {
-            if (++attempt > maxRetries) rethrow;
-          } on SocketException {
-            if (++attempt > maxRetries) rethrow;
+      // RandomAccessFile allows one pending operation at a time: serialize writes.
+      Future<void> write(int position, Uint8List bytes) {
+        final next = writeLock.then((_) async {
+          await raf.setPosition(position);
+          await raf.writeFrom(bytes);
+        });
+        writeLock = next.catchError((_) {});
+        return next;
+      }
+
+      var nextChunk = 0;
+      // One token for all workers: tripped by the caller's token or by the first
+      // worker that gives up, so the others stop instead of finishing their chunk.
+      final abort = CancelToken();
+      unawaited(cancelToken?.whenCancel.then((_) => abort.cancel()));
+
+      Future<void> worker() async {
+        while (!abort.isCancelled && nextChunk < chunks.length) {
+          final chunk = chunks[nextChunk++];
+          var attempt = 0;
+          while (true) {
+            if (abort.isCancelled) return;
+            try {
+              await _fetchChunk(url, chunk, headers, abort, (bytes) async {
+                await write(chunk.start + chunk.done, bytes);
+                chunk.done += bytes.length;
+                received += bytes.length;
+                onProgress?.call(received, total);
+              });
+              break;
+            } on DioException catch (e) {
+              if (e.type == DioExceptionType.cancel) return;
+              if (++attempt > maxRetries) rethrow;
+            } on HttpException {
+              if (++attempt > maxRetries) rethrow;
+            } on SocketException {
+              if (++attempt > maxRetries) rethrow;
+            }
+            await Future<void>.delayed(Duration(milliseconds: 400 * attempt * attempt));
           }
-          await Future<void>.delayed(Duration(milliseconds: 400 * attempt * attempt));
         }
       }
-    }
 
-    Future<void> guarded() async {
-      try {
-        await worker();
-      } catch (e, st) {
-        if (failure == null) {
-          failure = e;
-          failureStack = st;
+      Future<void> guarded() async {
+        try {
+          await worker();
+        } catch (e, st) {
+          if (failure == null) {
+            failure = e;
+            failureStack = st;
+          }
+          abort.cancel();
         }
-        abort.cancel();
       }
-    }
 
-    // Wait for every worker so nothing writes after the file is closed.
-    await Future.wait(List.generate(workers, (_) => guarded()));
-    await writeLock;
-    await raf.flush();
-    await raf.close();
+      // Wait for every worker so nothing writes after the file is closed.
+      await Future.wait(List.generate(workers, (_) => guarded()));
+      await writeLock;
+      await raf.flush();
+    } finally {
+      await raf.close();
+    }
 
     if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
     if (cancelToken?.isCancelled ?? false) {

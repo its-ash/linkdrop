@@ -34,6 +34,7 @@ class DownloadManager {
   late final LinkResolver _resolver;
   late final ParallelDownloader _downloader;
   final Map<String, CancelToken> _cancelTokens = {};
+  final Set<String> _activeDownloads = {};
   final Map<String, DateTime> _lastProgressSave = {};
 
   final _itemsController = StreamController<List<DownloadItem>>.broadcast();
@@ -44,6 +45,19 @@ class DownloadManager {
 
   Future<void> init() async {
     _items = await DatabaseService.instance.all();
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item.status == DownloadStatus.queued ||
+          item.status == DownloadStatus.resolving ||
+          item.status == DownloadStatus.downloading) {
+        if (item.filePath.isNotEmpty) {
+          await _deleteIfExists('${item.filePath}.part');
+        }
+        final updated = item.copyWith(status: DownloadStatus.failed, errorMessage: 'Interrupted');
+        _items[i] = updated;
+        await DatabaseService.instance.upsert(updated);
+      }
+    }
     _emit();
   }
 
@@ -84,6 +98,8 @@ class DownloadManager {
   /// Kicks off resolution + download for a raw shared URL string.
   Future<void> startFromSharedUrl(String url) async {
     final id = const Uuid().v4();
+    final cancelToken = CancelToken();
+    _cancelTokens[id] = cancelToken;
     var item = DownloadItem(
       id: id,
       url: url,
@@ -95,42 +111,74 @@ class DownloadManager {
     _update(item);
 
     if (isInstagramUrl(url)) {
-      await _startInstagram(item);
+      await _startInstagram(item, cancelToken);
       return;
     }
 
     try {
       final resolved = await _resolver.resolve(url);
+      if (cancelToken.isCancelled) {
+        _cancelTokens.remove(id);
+        return;
+      }
       final dir = await _downloadsDirectory();
       final targetPath = await _uniquePath(dir, resolved.fileName);
+      if (cancelToken.isCancelled) {
+        _cancelTokens.remove(id);
+        return;
+      }
       item = item.copyWith(mimeType: resolved.mimeType, totalBytes: resolved.totalBytes);
-      await _download(item, resolved.url, targetPath);
+      await _download(item, resolved.url, targetPath, cancelToken: cancelToken);
     } on LinkResolveException catch (e) {
-      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.message));
+      _cancelTokens.remove(id);
+      if (!cancelToken.isCancelled) {
+        _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.message));
+      }
     } catch (e) {
-      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.toString()));
+      _cancelTokens.remove(id);
+      if (!cancelToken.isCancelled) {
+        _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.toString()));
+      }
     }
   }
 
   /// Instagram post/reel: find the media behind the post, then download each
   /// file (a carousel becomes one library entry per slide).
-  Future<void> _startInstagram(DownloadItem item) async {
+  Future<void> _startInstagram(DownloadItem item, CancelToken cancelToken) async {
     final List<InstagramMedia> media;
     final InstagramPost post;
     try {
       post = await InstagramExtractor.instance.resolvePost(item.url);
+      if (cancelToken.isCancelled) {
+        _cancelTokens.remove(item.id);
+        return;
+      }
       final all = await InstagramExtractor.instance.extractMedia(post);
       final slide = instagramSlideIndex(item.url);
       media = slide != null && slide <= all.length && all.length > 1 ? [all[slide - 1]] : all;
     } on InstagramExtractException catch (e) {
-      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.message));
+      _cancelTokens.remove(item.id);
+      if (!cancelToken.isCancelled) {
+        _update(item.copyWith(status: DownloadStatus.failed, errorMessage: e.message));
+      }
       return;
     } catch (e) {
-      _update(item.copyWith(status: DownloadStatus.failed, errorMessage: 'Could not read the Instagram post: $e'));
+      _cancelTokens.remove(item.id);
+      if (!cancelToken.isCancelled) {
+        _update(item.copyWith(status: DownloadStatus.failed, errorMessage: 'Could not read the Instagram post: $e'));
+      }
       return;
     }
 
+    if (cancelToken.isCancelled) {
+      _cancelTokens.remove(item.id);
+      return;
+    }
     final dir = await _downloadsDirectory();
+    if (cancelToken.isCancelled) {
+      _cancelTokens.remove(item.id);
+      return;
+    }
     final slide = instagramSlideIndex(item.url);
     final jobs = <Future<void>>[];
     for (var i = 0; i < media.length; i++) {
@@ -150,14 +198,23 @@ class DownloadManager {
             );
       final name = number == null ? 'instagram_${post.code}.${m.extension}' : 'instagram_${post.code}_$number.${m.extension}';
       final targetPath = await _uniquePath(dir, name);
+      if (cancelToken.isCancelled) {
+        _cancelTokens.remove(item.id);
+        break;
+      }
       jobs.add(
         _download(
           entry.copyWith(mimeType: m.mimeType),
           m.url,
           targetPath,
           headers: const {'User-Agent': instagramDesktopUserAgent, 'Referer': 'https://www.instagram.com/'},
+          cancelToken: i == 0 ? cancelToken : null,
         ),
       );
+    }
+    if (jobs.isEmpty) {
+      _cancelTokens.remove(item.id);
+      return;
     }
     await Future.wait(jobs);
   }
@@ -169,8 +226,17 @@ class DownloadManager {
     String url,
     String targetPath, {
     Map<String, String> headers = const {},
+    CancelToken? cancelToken,
   }) async {
     final id = item.id;
+    final token = cancelToken ?? CancelToken();
+    if (token.isCancelled) {
+      _cancelTokens.remove(id);
+      return;
+    }
+    _cancelTokens[id] = token;
+    _activeDownloads.add(id);
+
     final partPath = '$targetPath.part';
     item = item.copyWith(
       fileName: p.basename(targetPath),
@@ -180,14 +246,12 @@ class DownloadManager {
     );
     _update(item);
 
-    final cancelToken = CancelToken();
-    _cancelTokens[id] = cancelToken;
     try {
       final savedBytes = await _downloader.download(
         url,
         partPath,
         headers: headers,
-        cancelToken: cancelToken,
+        cancelToken: token,
         onProgress: (received, total) {
           item = item.copyWith(receivedBytes: received, totalBytes: total > 0 ? total : item.totalBytes);
           _progress(item);
@@ -218,6 +282,7 @@ class DownloadManager {
       await _deleteIfExists(partPath);
       _update(item.copyWith(status: DownloadStatus.failed, errorMessage: 'Download failed: $e'));
     } finally {
+      _activeDownloads.remove(id);
       _cancelTokens.remove(id);
       _lastProgressSave.remove(id);
     }
@@ -247,33 +312,36 @@ class DownloadManager {
 
   void cancel(String id) {
     _cancelTokens[id]?.cancel();
+    if (_activeDownloads.contains(id)) return;
+    final idx = _items.indexWhere((e) => e.id == id);
+    if (idx < 0) return;
+    final item = _items[idx];
+    if (item.status == DownloadStatus.queued ||
+        item.status == DownloadStatus.resolving ||
+        item.status == DownloadStatus.downloading) {
+      _update(item.copyWith(status: DownloadStatus.canceled, errorMessage: null));
+    }
   }
 
   Future<void> retry(String id) async {
-    final item = _items.firstWhere((e) => e.id == id);
+    final idx = _items.indexWhere((e) => e.id == id);
+    if (idx < 0) return;
+    final item = _items[idx];
     await startFromSharedUrl(item.url);
     await remove(id);
   }
 
   Future<void> remove(String id) async {
     cancel(id);
-    final item = _items.firstWhere(
-      (e) => e.id == id,
-      orElse: () => DownloadItem(
-        id: id,
-        url: '',
-        fileName: '',
-        filePath: '',
-        status: DownloadStatus.canceled,
-        createdAt: DateTime.now(),
-      ),
-    );
-    if (item.filePath.isNotEmpty) {
-      final file = File(item.filePath);
-      if (await file.exists() && item.status != DownloadStatus.completed) {
-        await file.delete();
+    final idx = _items.indexWhere((e) => e.id == id);
+    if (idx >= 0) {
+      final item = _items[idx];
+      if (item.filePath.isNotEmpty) {
+        if (item.status != DownloadStatus.completed) {
+          await _deleteIfExists(item.filePath);
+        }
+        await _deleteIfExists('${item.filePath}.part');
       }
-      await _deleteIfExists('${item.filePath}.part');
     }
     _items.removeWhere((e) => e.id == id);
     _emit();
@@ -281,9 +349,13 @@ class DownloadManager {
   }
 
   Future<void> deleteCompletedFile(String id) async {
-    final item = _items.firstWhere((e) => e.id == id);
-    final file = File(item.filePath);
-    if (await file.exists()) await file.delete();
+    final idx = _items.indexWhere((e) => e.id == id);
+    if (idx < 0) return;
+    final item = _items[idx];
+    if (item.filePath.isNotEmpty) {
+      await _deleteIfExists(item.filePath);
+      await _deleteIfExists('${item.filePath}.part');
+    }
     _items.removeWhere((e) => e.id == id);
     _emit();
     await DatabaseService.instance.delete(id);

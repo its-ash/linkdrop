@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:path/path.dart' as p;
 
 export '../utils/share_parser.dart' show extractUrl;
 
@@ -41,7 +42,7 @@ class LinkResolver {
       throw LinkResolveException('Not a valid downloadable link.');
     }
 
-    Response<void>? response;
+    Response<dynamic>? response;
     try {
       response = await _dio.headUri<void>(
         uri,
@@ -54,7 +55,7 @@ class LinkResolver {
     if (response.statusCode == null || response.statusCode! >= 400) {
       // Some servers reject HEAD; retry with a byte-ranged GET.
       try {
-        response = await _dio.getUri<void>(
+        final ranged = await _dio.getUri<ResponseBody>(
           uri,
           options: Options(
             followRedirects: true,
@@ -63,6 +64,10 @@ class LinkResolver {
             responseType: ResponseType.stream,
           ),
         );
+        try {
+          await ranged.data?.stream.listen(null).cancel();
+        } catch (_) {}
+        response = ranged;
       } on DioException catch (e) {
         throw LinkResolveException(_describeDioError(e));
       }
@@ -81,8 +86,9 @@ class LinkResolver {
         ?.split(';')
         .first
         .trim();
-    final contentLength =
-        int.tryParse(headers.value(Headers.contentLengthHeader) ?? '') ?? 0;
+    final contentLength = response.statusCode == 206
+        ? _totalFromContentRange(headers.value('content-range')) ?? 0
+        : int.tryParse(headers.value(Headers.contentLengthHeader) ?? '') ?? 0;
 
     final contentDisposition = headers.value('content-disposition');
     final isAttachment =
@@ -122,6 +128,18 @@ class LinkResolver {
     }
   }
 
+  int? _totalFromContentRange(String? value) {
+    final m = RegExp(r'/(\d+)\s*$').firstMatch(value ?? '');
+    return m == null ? null : int.tryParse(m.group(1)!);
+  }
+
+  String _sanitizeFileName(String raw) {
+    var name = p.basename(raw.replaceAll('\\', '/')).trim();
+    name = name.replaceAll(RegExp(r'[\x00/\\]+'), '').replaceAll('..', '').trim();
+    if (name.isEmpty || name == '.') return '';
+    return name;
+  }
+
   String _resolveFileName(
     String? contentDisposition,
     Uri finalUri,
@@ -138,17 +156,27 @@ class LinkResolver {
       ).firstMatch(contentDisposition);
       final raw = starMatch?.group(1) ?? plainMatch?.group(1);
       if (raw != null && raw.trim().isNotEmpty) {
-        return Uri.decodeComponent(raw.trim());
+        final trimmed = raw.trim();
+        String decoded;
+        try {
+          decoded = Uri.decodeComponent(trimmed);
+        } catch (_) {
+          decoded = trimmed;
+        }
+        final safe = _sanitizeFileName(decoded);
+        if (safe.isNotEmpty) return safe;
       }
     }
 
     final segments = finalUri.pathSegments.where((s) => s.isNotEmpty).toList();
     if (segments.isNotEmpty && segments.last.contains('.')) {
-      return Uri.decodeComponent(segments.last);
+      final safe = _sanitizeFileName(segments.last);
+      if (safe.isNotEmpty) return safe;
     }
 
     final ext = _extensionForMime(contentType);
-    final base = segments.isNotEmpty ? segments.last : 'download';
+    final rawBase = segments.isNotEmpty ? _sanitizeFileName(segments.last) : '';
+    final base = rawBase.isNotEmpty ? rawBase : 'download';
     return '$base${ext.isNotEmpty ? '.$ext' : ''}';
   }
 
